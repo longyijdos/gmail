@@ -45,6 +45,7 @@ export function buildProgram(run: () => Promise<void>): Command {
   const auth = program.command("auth").description("Manage Gmail authorization");
   auth.action(() => auth.help());
   runnable(auth.command("login").description("Authorize access to Gmail"), run)
+    .option("--no-open", "print the authorization URL without opening a browser")
     .option("--scope <scope>", "Gmail scope alias; repeat or comma-separate for multiple scopes", collect);
   runnable(auth.command("status").description("Show authorization status"), run);
   runnable(auth.command("logout").description("Delete stored credentials"), run);

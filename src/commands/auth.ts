@@ -1,5 +1,5 @@
 import { authStatus, deleteCredentials, login, normalizeScopes } from "../auth";
-import { many } from "../cli";
+import { many, one } from "../cli";
 import { resolveOAuthClient } from "./helpers";
 import type { CommandContext } from "./types";
 
@@ -8,7 +8,30 @@ export async function handleAuthCommand(context: Omit<CommandContext, "oauthClie
   if (subcommand === "login") {
     const client = await resolveOAuthClient(parsed.flags, { required: true });
     const scopes = normalizeScopes(many(parsed.flags, "scope"), ["readonly"]);
-    const token = await login(client, scopes.normalized);
+    const noOpen = one(parsed.flags, "no-open") !== undefined;
+    const token = await login(client, scopes.normalized, {
+      openBrowser: !noOpen,
+      onAuthorizationUrl(url) {
+        process.stdout.write([
+          "Authorize gml by opening this URL:",
+          "",
+          url,
+          "",
+          noOpen
+            ? "Waiting for authorization..."
+            : "Opening your browser and waiting for authorization...",
+          "",
+        ].join("\n"));
+      },
+      onBrowserOpenError(error) {
+        const message = error instanceof Error ? error.message : String(error);
+        process.stdout.write([
+          `Could not open the browser automatically: ${message}`,
+          "Open the URL above manually. Waiting for authorization...",
+          "",
+        ].join("\n"));
+      },
+    });
     return {
       ok: true,
       authorized: true,

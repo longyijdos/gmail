@@ -37,6 +37,12 @@ export type NormalizedScopes = {
   }>;
 };
 
+export type LoginOptions = {
+  openBrowser?: boolean;
+  onAuthorizationUrl?: (url: string) => void | Promise<void>;
+  onBrowserOpenError?: (error: unknown) => void | Promise<void>;
+};
+
 export function expandScopes(values: string[], fallback: string[] = ["readonly"]): string[] {
   const scopes = values.length === 0 ? fallback : values;
   return normalizeScopes(
@@ -82,7 +88,11 @@ export function normalizeScopes(values: string[], fallback: string[] = ["readonl
   };
 }
 
-export async function login(client: OAuthClient, scopes: string[]): Promise<StoredToken> {
+export async function login(
+  client: OAuthClient,
+  scopes: string[],
+  options: LoginOptions = {},
+): Promise<StoredToken> {
   const callback = await startCallbackServer();
   try {
     const pkce = createPkce();
@@ -98,8 +108,17 @@ export async function login(client: OAuthClient, scopes: string[]): Promise<Stor
     url.searchParams.set("access_type", "offline");
     url.searchParams.set("prompt", "consent");
 
+    const authorizationUrl = url.toString();
     const wait = callback.waitForCode(state);
-    await openBrowser(url.toString());
+    await options.onAuthorizationUrl?.(authorizationUrl);
+    if (options.openBrowser !== false) {
+      try {
+        await openBrowser(authorizationUrl);
+      } catch (error) {
+        if (options.onBrowserOpenError === undefined) throw error;
+        await options.onBrowserOpenError(error);
+      }
+    }
     const code = await wait;
     const token = await exchangeCode({
       code,

@@ -18,7 +18,7 @@ bun run build
 
 ## Google setup
 
-Create an OAuth client in Google Cloud Console. Use a Desktop app client when possible. The CLI opens a browser and listens on a local loopback callback URL.
+Create an OAuth client in Google Cloud Console. Use a Desktop app client when possible. The CLI prints the authorization URL, opens it in a browser, and listens on a local loopback callback URL.
 
 You provide OAuth client credentials during login. After successful login, `gml` persists the parsed client id/secret together with the token so later commands can refresh automatically.
 
@@ -32,6 +32,12 @@ Option 2: pass values through flags or environment variables:
 
 ```sh
 gml auth login --client-id "$GML_CLIENT_ID" --client-secret "$GML_CLIENT_SECRET"
+```
+
+To open the printed URL yourself instead of launching a browser:
+
+```sh
+gml auth login --no-open --client-secret-file /path/to/client_secret_....json
 ```
 
 By default, login requests `gmail.readonly`. Request extra scopes explicitly:

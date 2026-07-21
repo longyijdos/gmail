@@ -24,7 +24,7 @@ describe("args", () => {
     const program = buildProgram(async () => {
       called = true;
     });
-    await program.parseAsync(["auth", "login", "--client-id", "test", "--scope", "readonly"], { from: "user" });
+    await program.parseAsync(["auth", "login", "--no-open", "--client-id", "test", "--scope", "readonly"], { from: "user" });
     expect(called).toBe(true);
   });
 
