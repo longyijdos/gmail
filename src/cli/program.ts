@@ -49,66 +49,66 @@ export function buildProgram(run: () => Promise<void>): Command {
   runnable(auth.command("status").description("Show authorization status"), run);
   runnable(auth.command("logout").description("Delete stored credentials"), run);
 
-  runnable(program.command("profile").description("Show the Gmail profile"), run);
+  apiRunnable(program.command("profile").description("Show the Gmail profile"), run);
 
   const labels = program.command("labels").description("List Gmail labels");
-  runnable(labels, run);
-  runnable(labels.command("list").description("List Gmail labels"), run);
-  runnable(program.command("label-create [name]").description("Create a label"), run)
+  apiRunnable(labels, run);
+  apiRunnable(labels.command("list").description("List Gmail labels"), run);
+  apiRunnable(program.command("label-create [name]").description("Create a label"), run)
     .option("--name <name>", "label name");
-  runnable(program.command("label-delete <label>").description("Delete a label by name or id"), run);
-  runnable(program.command("label-rename <label>").description("Rename a label"), run)
+  apiRunnable(program.command("label-delete <label>").description("Delete a label by name or id"), run);
+  apiRunnable(program.command("label-rename <label>").description("Rename a label"), run)
     .requiredOption("--to <name>", "new label name");
 
   addListOptions(
-    runnable(program.command("list [query...]").description("List messages, optionally using a Gmail query"), run),
+    apiRunnable(program.command("list [query...]").description("List messages, optionally using a Gmail query"), run),
   ).option("--q <query>", "Gmail search query");
   addListOptions(
-    runnable(program.command("search [query...]").description("Search messages using Gmail query syntax"), run),
+    apiRunnable(program.command("search [query...]").description("Search messages using Gmail query syntax"), run),
   ).option("--q <query>", "Gmail search query");
 
   const messages = program.command("messages").description("Access Gmail messages");
   messages.action(() => messages.help());
-  addListOptions(runnable(messages.command("list").description("List messages"), run))
+  addListOptions(apiRunnable(messages.command("list").description("List messages"), run))
     .option("--q <query>", "Gmail search query");
-  runnable(messages.command("get [id]").description("Get a Gmail API message resource"), run)
+  apiRunnable(messages.command("get [id]").description("Get a Gmail API message resource"), run)
     .option("--id <id>", "message id")
     .addOption(new Option("--format <format>", "response format").choices(["full", "minimal", "raw", "metadata"]))
     .option("--metadata-header <name>", "metadata header to include; repeat for multiple headers", collect);
 
-  runnable(program.command("read [id]").description("Read a normalized message"), run)
+  apiRunnable(program.command("read [id]").description("Read a normalized message"), run)
     .option("--id <id>", "message id")
     .option("--raw", "return the raw RFC 2822 message");
 
   addThreadListOptions(
-    runnable(program.command("threads [query...]").description("List threads"), run),
+    apiRunnable(program.command("threads [query...]").description("List threads"), run),
   ).option("--q <query>", "Gmail search query");
-  runnable(program.command("thread [id]").description("Get a thread"), run)
+  apiRunnable(program.command("thread [id]").description("Get a thread"), run)
     .option("--id <id>", "thread id")
     .addOption(new Option("--format <format>", "response format").choices(["full", "minimal", "metadata"]));
 
-  runnable(program.command("attachments [message-id]").description("List message attachments"), run)
+  apiRunnable(program.command("attachments [message-id]").description("List message attachments"), run)
     .option("--id <id>", "message id");
-  runnable(program.command("download [message-id]").description("Download message attachments"), run)
+  apiRunnable(program.command("download [message-id]").description("Download message attachments"), run)
     .option("--id <id>", "message id")
     .option("--attachment <id>", "download only one attachment")
     .option("--out <directory>", "output directory", ".");
 
   addComposeOptions(
-    runnable(program.command("send").description("Send a message"), run)
+    apiRunnable(program.command("send").description("Send a message"), run)
       .requiredOption("--to <address>", "recipient; repeat for multiple recipients", collect)
       .requiredOption("--subject <subject>", "message subject"),
   );
 
   addBodyOptions(
-    runnable(program.command("reply [message-id]").description("Reply to a message"), run)
+    apiRunnable(program.command("reply [message-id]").description("Reply to a message"), run)
       .option("--id <id>", "message id")
       .option("--all", "reply to all recipients")
       .option("--attach <path>", "attachment path; repeat for multiple files", collect),
   );
 
   addOptionalBodyOptions(
-    runnable(program.command("forward [message-id]").description("Forward a message"), run)
+    apiRunnable(program.command("forward [message-id]").description("Forward a message"), run)
       .option("--id <id>", "message id")
       .requiredOption("--to <address>", "recipient; repeat for multiple recipients", collect)
       .option("--cc <address>", "CC recipient; repeat for multiple recipients", collect)
@@ -118,18 +118,18 @@ export function buildProgram(run: () => Promise<void>): Command {
   );
 
   addComposeOptions(
-    runnable(program.command("draft").description("Create a draft"), run)
+    apiRunnable(program.command("draft").description("Create a draft"), run)
       .requiredOption("--to <address>", "recipient; repeat for multiple recipients", collect)
       .requiredOption("--subject <subject>", "message subject"),
   );
-  runnable(program.command("drafts").description("List drafts"), run)
+  apiRunnable(program.command("drafts").description("List drafts"), run)
     .option("--max-results <count>", "maximum number of drafts");
-  runnable(program.command("draft-send [draft-id]").description("Send a draft"), run)
+  apiRunnable(program.command("draft-send [draft-id]").description("Send a draft"), run)
     .option("--id <id>", "draft id");
-  runnable(program.command("draft-delete [draft-id]").description("Delete a draft"), run)
+  apiRunnable(program.command("draft-delete [draft-id]").description("Delete a draft"), run)
     .option("--id <id>", "draft id");
 
-  runnable(program.command("modify [ids...]").description("Add or remove labels from messages"), run)
+  apiRunnable(program.command("modify [ids...]").description("Add or remove labels from messages"), run)
     .option("--query <query>", "select messages using a Gmail query")
     .option("--max-results <count>", "maximum query results", "100")
     .option("--add <label>", "label to add; repeat for multiple labels", collect)
@@ -147,12 +147,12 @@ export function buildProgram(run: () => Promise<void>): Command {
     ["spam", "Mark messages as spam"],
     ["unspam", "Remove messages from spam"],
   ] as const) {
-    runnable(program.command(`${name} [ids...]`).description(description), run)
+    apiRunnable(program.command(`${name} [ids...]`).description(description), run)
       .option("--query <query>", "select messages using a Gmail query")
       .option("--max-results <count>", "maximum query results", "100");
   }
 
-  runnable(program.command("request [method] [path]").description("Call a Gmail API endpoint directly"), run)
+  apiRunnable(program.command("request [method] [path]").description("Call a Gmail API endpoint directly"), run)
     .addOption(new Option("--method <method>", "HTTP method").choices(["GET", "POST", "PUT", "PATCH", "DELETE"]))
     .option("--path <path>", "Gmail API path")
     .option("--body <json>", "JSON request body")
@@ -163,6 +163,10 @@ export function buildProgram(run: () => Promise<void>): Command {
 
 function runnable(command: Command, run: () => Promise<void>): Command {
   return command.allowExcessArguments(false).action(run);
+}
+
+function apiRunnable(command: Command, run: () => Promise<void>): Command {
+  return runnable(command, run).option("--json", "output JSON");
 }
 
 function addListOptions(command: Command): Command {

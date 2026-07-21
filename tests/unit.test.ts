@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { expandScopes, GMAIL_SCOPES, normalizeScopes } from "../src/auth";
-import { buildProgram, parseArgs } from "../src/cli";
+import { buildProgram, formatCommandOutput, parseArgs, wantsJson } from "../src/cli";
 import { encodeMime } from "../src/gmail";
 
 describe("args", () => {
@@ -26,6 +26,54 @@ describe("args", () => {
     });
     await program.parseAsync(["auth", "login", "--client-id", "test", "--scope", "readonly"], { from: "user" });
     expect(called).toBe(true);
+  });
+
+  test("JSON output is available for Gmail commands only", async () => {
+    let called = false;
+    const gmailProgram = buildProgram(async () => {
+      called = true;
+    });
+    await gmailProgram.parseAsync(["profile", "--json"], { from: "user" });
+    expect(called).toBe(true);
+
+    const authProgram = buildProgram(async () => undefined)
+      .configureOutput({ writeErr: () => undefined, outputError: () => undefined });
+    await expect(authProgram.parseAsync(["auth", "status", "--json"], { from: "user" })).rejects.toMatchObject({
+      code: "commander.unknownOption",
+    });
+  });
+});
+
+describe("text output", () => {
+  test("formats message lists with ids and pagination", () => {
+    expect(formatCommandOutput({
+      ok: true,
+      data: {
+        messages: [{ id: "message-1", threadId: "thread-1" }],
+        nextPageToken: "next-token",
+        resultSizeEstimate: 12,
+      },
+    }, ["messages", "list"])).toBe([
+      "1 message(s).",
+      "message-1\tthread-1",
+      "Next page: next-token",
+      "Estimated total: 12",
+    ].join("\n"));
+  });
+
+  test("formats auth status as text", () => {
+    expect(formatCommandOutput({
+      ok: true,
+      authorized: false,
+      state: "unauthorized",
+      refreshable: false,
+      credentialsPath: "/tmp/gml/credentials.json",
+    }, ["auth", "status"])).toContain("Not authorized.\nState: unauthorized");
+  });
+
+  test("does not enable JSON mode for auth commands", () => {
+    expect(wantsJson(["auth", "status", "--json"])).toBe(false);
+    expect(wantsJson(["profile", "--json"])).toBe(true);
   });
 });
 

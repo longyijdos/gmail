@@ -76,12 +76,20 @@ The credentials file is written with private file mode `0600`; the directory is 
 
 ## Commands
 
-Command results and errors are JSON. Help and version output are plain text.
+Commands print concise text by default. Commands which call the Gmail API accept
+`--json` for structured output. Help, version, and `auth` commands always use text.
+Successful output is written to stdout and errors are written to stderr in both
+text and JSON modes.
 
 ```sh
 gml --help
 gml help send
 gml --version
+```
+
+```sh
+gml messages list --q 'is:unread' --max-results 10
+gml messages list --q 'is:unread' --max-results 10 --json
 ```
 
 ```sh
