@@ -135,7 +135,7 @@ export async function login(
 }
 
 export async function getAccessToken(
-  requiredScopes: string[] = [],
+  acceptedScopes: string[] = [],
   client?: OAuthClient,
 ): Promise<string> {
   const credentials = await loadCredentials();
@@ -148,9 +148,10 @@ export async function getAccessToken(
     await deleteCredentials();
     throw new CliError("Stored token belongs to a different client. Run `gml auth login` again.", "client_changed");
   }
-  const missing = requiredScopes.filter((scope) => !isScopeSatisfied(scope, token.scopes));
-  if (missing.length > 0) {
-    throw new CliError("Stored token does not include required Gmail scope. Re-run `gml auth login` with broader scopes.", "scope_missing", { missing });
+  if (!hasAcceptedScope(acceptedScopes, token.scopes)) {
+    throw new CliError("Stored token does not include a Gmail scope accepted by this operation. Re-run `gml auth login` with an accepted scope.", "scope_missing", {
+      accepted: acceptedScopes,
+    });
   }
   if (isUsable(token)) return token.accessToken;
   if (!token.refreshToken) {
@@ -165,6 +166,10 @@ export async function getAccessToken(
   const refreshed = await refreshToken(refreshClient, token);
   await saveCredentials({ client: refreshClient, token: refreshed });
   return refreshed.accessToken;
+}
+
+export function hasAcceptedScope(accepted: string[], granted: string[]): boolean {
+  return accepted.length === 0 || accepted.some((scope) => isScopeSatisfied(scope, granted));
 }
 
 function isScopeSatisfied(required: string, granted: string[]): boolean {

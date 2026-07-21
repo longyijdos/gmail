@@ -20,7 +20,7 @@ export async function handleOrganizeCommand(context: CommandContext): Promise<un
     const ids = await resolveTargets(positionals(subcommand, rest), parsed.flags, oauthClient);
     const labels = await labelsForOrganize(command, parsed.flags, oauthClient);
     const data = await modifyMessages({ ids, ...labels, oauthClient });
-    return { ok: true, data };
+    return { ok: true, updated: ids.length, batches: Math.ceil(ids.length / 1000), data };
   }
   if (command === "trash" || command === "untrash") {
     const ids = await resolveTargets(positionals(subcommand, rest), parsed.flags, oauthClient);

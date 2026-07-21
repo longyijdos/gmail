@@ -49,6 +49,7 @@ export async function handleReadCommand(context: CommandContext): Promise<unknow
         maxResults: one(parsed.flags, "max-results"),
         pageToken: one(parsed.flags, "page-token"),
         labelIds: await resolveLabelFlags(parsed.flags, oauthClient),
+        includeSpamTrash: bool(parsed.flags, "include-spam-trash"),
         oauthClient,
       }),
     };
@@ -56,7 +57,15 @@ export async function handleReadCommand(context: CommandContext): Promise<unknow
   if (command === "thread") {
     const id = subcommand ?? one(parsed.flags, "id");
     if (!id) throw new CliError("Missing thread id.", "thread_id_missing");
-    return { ok: true, data: await getThread({ id, format: one(parsed.flags, "format") ?? "full", oauthClient }) };
+    return {
+      ok: true,
+      data: await getThread({
+        id,
+        format: one(parsed.flags, "format") ?? "full",
+        metadataHeaders: many(parsed.flags, "metadata-header"),
+        oauthClient,
+      }),
+    };
   }
   if (command === "attachments") {
     const id = subcommand ?? one(parsed.flags, "id");
@@ -79,7 +88,12 @@ async function readMessage(context: CommandContext): Promise<unknown> {
       format: raw === undefined ? "full" : "raw",
       oauthClient,
     }) as Record<string, unknown>;
-    if (raw !== undefined) return { ok: true, raw: message.raw };
+    if (raw !== undefined) {
+      if (typeof message.raw !== "string") {
+        throw new CliError("Raw message response did not include raw data.", "raw_message_missing");
+      }
+      return { ok: true, raw: base64urlDecode(message.raw).toString("utf8") };
+    }
     const payload = message.payload;
     const body = extractBody(payload);
     return {

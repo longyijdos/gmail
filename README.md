@@ -125,6 +125,13 @@ gml request GET /users/me/messages
 gml request POST /users/me/messages/send --body '{"raw":"..."}'
 ```
 
+Query-based organize commands follow all result pages by default. Use
+`--max-results <count>` to set a total safety limit. Gmail batch modifications
+are automatically split into requests of at most 1000 message IDs.
+
+The implemented endpoints and response types are tracked in
+[`docs/gmail-api-audit.md`](docs/gmail-api-audit.md).
+
 ## npm release
 
 ```sh

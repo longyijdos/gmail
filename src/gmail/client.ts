@@ -9,12 +9,12 @@ export type RequestOptions = {
   path: string;
   query?: Record<string, string | string[] | undefined>;
   body?: unknown;
-  requiredScopes?: string[];
+  acceptedScopes?: string[];
   oauthClient?: OAuthClient;
 };
 
 export async function gmailRequest(options: RequestOptions): Promise<unknown> {
-  const token = await getAccessToken(options.requiredScopes, options.oauthClient);
+  const token = await getAccessToken(options.acceptedScopes, options.oauthClient);
   const url = new URL(normalizePath(options.path), GMAIL_BASE);
   for (const [key, value] of Object.entries(options.query ?? {})) {
     if (value === undefined) continue;
@@ -34,7 +34,21 @@ export async function gmailRequest(options: RequestOptions): Promise<unknown> {
     ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
   });
   const text = await response.text();
-  const body = text ? JSON.parse(text) : {};
+  let body: unknown = {};
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      if (response.ok) {
+        throw new CliError("Gmail API returned a non-JSON success response.", "gmail_protocol_error", {
+          status: response.status,
+          method: options.method,
+          path: url.pathname,
+        });
+      }
+      body = { text: text.slice(0, 4096) };
+    }
+  }
   if (!response.ok) {
     throw new CliError("Gmail API request failed.", "gmail_request_failed", {
       status: response.status,
@@ -50,7 +64,7 @@ export function profile(oauthClient?: OAuthClient): Promise<unknown> {
   return gmailRequest({
     method: "GET",
     path: "/users/me/profile",
-    requiredScopes: [GMAIL_SCOPES.readonly],
+    acceptedScopes: [GMAIL_SCOPES.readonly, GMAIL_SCOPES.metadata, GMAIL_SCOPES.compose],
     oauthClient,
   });
 }
@@ -59,7 +73,7 @@ export function listLabels(oauthClient?: OAuthClient): Promise<unknown> {
   return gmailRequest({
     method: "GET",
     path: "/users/me/labels",
-    requiredScopes: [GMAIL_SCOPES.readonly],
+    acceptedScopes: [GMAIL_SCOPES.readonly, GMAIL_SCOPES.metadata, GMAIL_SCOPES.labels],
     oauthClient,
   });
 }
@@ -82,7 +96,9 @@ export function listMessages(options: {
       labelIds: options.labelIds,
       includeSpamTrash: options.includeSpamTrash,
     },
-    requiredScopes: [GMAIL_SCOPES.readonly],
+    acceptedScopes: options.q === undefined
+      ? [GMAIL_SCOPES.readonly, GMAIL_SCOPES.metadata]
+      : [GMAIL_SCOPES.readonly],
     oauthClient: options.oauthClient,
   });
 }
@@ -100,7 +116,9 @@ export function getMessage(options: {
       format: options.format,
       metadataHeaders: options.metadataHeaders,
     },
-    requiredScopes: [GMAIL_SCOPES.readonly],
+    acceptedScopes: options.format === "metadata" || options.format === "minimal"
+      ? [GMAIL_SCOPES.readonly, GMAIL_SCOPES.metadata]
+      : [GMAIL_SCOPES.readonly],
     oauthClient: options.oauthClient,
   });
 }
@@ -126,7 +144,7 @@ export function sendMessage(options: {
       raw: buildRaw(options),
       ...(options.threadId === undefined ? {} : { threadId: options.threadId }),
     },
-    requiredScopes: [GMAIL_SCOPES.send],
+    acceptedScopes: [GMAIL_SCOPES.send],
     oauthClient: options.oauthClient,
   });
 }
@@ -136,6 +154,7 @@ export function listThreads(options: {
   maxResults?: string;
   pageToken?: string;
   labelIds?: string[];
+  includeSpamTrash?: string;
   oauthClient?: OAuthClient;
 }): Promise<unknown> {
   return gmailRequest({
@@ -146,8 +165,11 @@ export function listThreads(options: {
       maxResults: options.maxResults,
       pageToken: options.pageToken,
       labelIds: options.labelIds,
+      includeSpamTrash: options.includeSpamTrash,
     },
-    requiredScopes: [GMAIL_SCOPES.readonly],
+    acceptedScopes: options.q === undefined
+      ? [GMAIL_SCOPES.readonly, GMAIL_SCOPES.metadata]
+      : [GMAIL_SCOPES.readonly],
     oauthClient: options.oauthClient,
   });
 }
@@ -165,7 +187,9 @@ export function getThread(options: {
       format: options.format,
       metadataHeaders: options.metadataHeaders,
     },
-    requiredScopes: [GMAIL_SCOPES.readonly],
+    acceptedScopes: options.format === "metadata" || options.format === "minimal"
+      ? [GMAIL_SCOPES.readonly, GMAIL_SCOPES.metadata]
+      : [GMAIL_SCOPES.readonly],
     oauthClient: options.oauthClient,
   });
 }
@@ -178,12 +202,12 @@ export function getAttachment(options: {
   return gmailRequest({
     method: "GET",
     path: `/users/me/messages/${encodeURIComponent(options.messageId)}/attachments/${encodeURIComponent(options.attachmentId)}`,
-    requiredScopes: [GMAIL_SCOPES.readonly],
+    acceptedScopes: [GMAIL_SCOPES.readonly],
     oauthClient: options.oauthClient,
   });
 }
 
-export function modifyMessages(options: {
+export async function modifyMessages(options: {
   ids: string[];
   addLabelIds?: string[];
   removeLabelIds?: string[];
@@ -194,21 +218,25 @@ export function modifyMessages(options: {
       method: "POST",
       path: `/users/me/messages/${encodeURIComponent(options.ids[0]!)}/modify`,
       body: { addLabelIds: options.addLabelIds ?? [], removeLabelIds: options.removeLabelIds ?? [] },
-      requiredScopes: [GMAIL_SCOPES.modify],
+      acceptedScopes: [GMAIL_SCOPES.modify],
       oauthClient: options.oauthClient,
     });
   }
-  return gmailRequest({
-    method: "POST",
-    path: "/users/me/messages/batchModify",
-    body: {
-      ids: options.ids,
-      addLabelIds: options.addLabelIds ?? [],
-      removeLabelIds: options.removeLabelIds ?? [],
-    },
-    requiredScopes: [GMAIL_SCOPES.modify],
-    oauthClient: options.oauthClient,
-  });
+  const responses = [];
+  for (let index = 0; index < options.ids.length; index += 1000) {
+    responses.push(await gmailRequest({
+      method: "POST",
+      path: "/users/me/messages/batchModify",
+      body: {
+        ids: options.ids.slice(index, index + 1000),
+        addLabelIds: options.addLabelIds ?? [],
+        removeLabelIds: options.removeLabelIds ?? [],
+      },
+      acceptedScopes: [GMAIL_SCOPES.modify],
+      oauthClient: options.oauthClient,
+    }));
+  }
+  return responses.length === 1 ? responses[0] : { responses };
 }
 
 export function messageAction(options: {
@@ -219,7 +247,7 @@ export function messageAction(options: {
   return gmailRequest({
     method: "POST",
     path: `/users/me/messages/${encodeURIComponent(options.id)}/${options.action}`,
-    requiredScopes: [GMAIL_SCOPES.modify],
+    acceptedScopes: [GMAIL_SCOPES.modify],
     oauthClient: options.oauthClient,
   });
 }
@@ -229,7 +257,7 @@ export function createLabel(options: { name: string; oauthClient?: OAuthClient }
     method: "POST",
     path: "/users/me/labels",
     body: { name: options.name, labelListVisibility: "labelShow", messageListVisibility: "show" },
-    requiredScopes: [GMAIL_SCOPES.labels],
+    acceptedScopes: [GMAIL_SCOPES.labels, GMAIL_SCOPES.modify],
     oauthClient: options.oauthClient,
   });
 }
@@ -243,7 +271,7 @@ export function patchLabel(options: {
     method: "PATCH",
     path: `/users/me/labels/${encodeURIComponent(options.id)}`,
     body: { name: options.name },
-    requiredScopes: [GMAIL_SCOPES.labels],
+    acceptedScopes: [GMAIL_SCOPES.labels, GMAIL_SCOPES.modify],
     oauthClient: options.oauthClient,
   });
 }
@@ -252,7 +280,7 @@ export function deleteLabel(options: { id: string; oauthClient?: OAuthClient }):
   return gmailRequest({
     method: "DELETE",
     path: `/users/me/labels/${encodeURIComponent(options.id)}`,
-    requiredScopes: [GMAIL_SCOPES.labels],
+    acceptedScopes: [GMAIL_SCOPES.labels, GMAIL_SCOPES.modify],
     oauthClient: options.oauthClient,
   });
 }
@@ -272,17 +300,28 @@ export function createDraft(options: {
     method: "POST",
     path: "/users/me/drafts",
     body: { message: { raw: buildRaw(options) } },
-    requiredScopes: [GMAIL_SCOPES.compose],
+    acceptedScopes: [GMAIL_SCOPES.compose],
     oauthClient: options.oauthClient,
   });
 }
 
-export function listDrafts(options: { maxResults?: string; oauthClient?: OAuthClient }): Promise<unknown> {
+export function listDrafts(options: {
+  maxResults?: string;
+  pageToken?: string;
+  q?: string;
+  includeSpamTrash?: string;
+  oauthClient?: OAuthClient;
+}): Promise<unknown> {
   return gmailRequest({
     method: "GET",
     path: "/users/me/drafts",
-    query: { maxResults: options.maxResults },
-    requiredScopes: [GMAIL_SCOPES.compose],
+    query: {
+      maxResults: options.maxResults,
+      pageToken: options.pageToken,
+      q: options.q,
+      includeSpamTrash: options.includeSpamTrash,
+    },
+    acceptedScopes: [GMAIL_SCOPES.readonly, GMAIL_SCOPES.compose],
     oauthClient: options.oauthClient,
   });
 }
@@ -292,7 +331,7 @@ export function sendDraft(options: { id: string; oauthClient?: OAuthClient }): P
     method: "POST",
     path: "/users/me/drafts/send",
     body: { id: options.id },
-    requiredScopes: [GMAIL_SCOPES.compose],
+    acceptedScopes: [GMAIL_SCOPES.compose],
     oauthClient: options.oauthClient,
   });
 }
@@ -301,7 +340,7 @@ export function deleteDraft(options: { id: string; oauthClient?: OAuthClient }):
   return gmailRequest({
     method: "DELETE",
     path: `/users/me/drafts/${encodeURIComponent(options.id)}`,
-    requiredScopes: [GMAIL_SCOPES.compose],
+    acceptedScopes: [GMAIL_SCOPES.compose],
     oauthClient: options.oauthClient,
   });
 }

@@ -1,4 +1,4 @@
-import { Command, CommanderError, Option } from "commander";
+import { Command, CommanderError, InvalidArgumentError, Option } from "commander";
 import { runCommand } from "../commands";
 import { CliError } from "./json";
 
@@ -86,7 +86,8 @@ export function buildProgram(run: () => Promise<void>): Command {
   ).option("--q <query>", "Gmail search query");
   apiRunnable(program.command("thread [id]").description("Get a thread"), run)
     .option("--id <id>", "thread id")
-    .addOption(new Option("--format <format>", "response format").choices(["full", "minimal", "metadata"]));
+    .addOption(new Option("--format <format>", "response format").choices(["full", "minimal", "metadata"]))
+    .option("--metadata-header <name>", "metadata header to include; repeat for multiple headers", collect);
 
   apiRunnable(program.command("attachments [message-id]").description("List message attachments"), run)
     .option("--id <id>", "message id");
@@ -124,7 +125,10 @@ export function buildProgram(run: () => Promise<void>): Command {
       .requiredOption("--subject <subject>", "message subject"),
   );
   apiRunnable(program.command("drafts").description("List drafts"), run)
-    .option("--max-results <count>", "maximum number of drafts");
+    .addOption(gmailMaxResultsOption("maximum number of drafts"))
+    .option("--page-token <token>", "pagination token")
+    .option("--q <query>", "Gmail search query")
+    .addOption(includeSpamTrashOption());
   apiRunnable(program.command("draft-send [draft-id]").description("Send a draft"), run)
     .option("--id <id>", "draft id");
   apiRunnable(program.command("draft-delete [draft-id]").description("Delete a draft"), run)
@@ -132,7 +136,7 @@ export function buildProgram(run: () => Promise<void>): Command {
 
   apiRunnable(program.command("modify [ids...]").description("Add or remove labels from messages"), run)
     .option("--query <query>", "select messages using a Gmail query")
-    .option("--max-results <count>", "maximum query results", "100")
+    .addOption(positiveCountOption("stop after this many query matches"))
     .option("--add <label>", "label to add; repeat for multiple labels", collect)
     .option("--remove <label>", "label to remove; repeat for multiple labels", collect);
 
@@ -150,7 +154,7 @@ export function buildProgram(run: () => Promise<void>): Command {
   ] as const) {
     apiRunnable(program.command(`${name} [ids...]`).description(description), run)
       .option("--query <query>", "select messages using a Gmail query")
-      .option("--max-results <count>", "maximum query results", "100");
+      .addOption(positiveCountOption("stop after this many query matches"));
   }
 
   apiRunnable(program.command("request [method] [path]").description("Call a Gmail API endpoint directly"), run)
@@ -172,19 +176,44 @@ function apiRunnable(command: Command, run: () => Promise<void>): Command {
 
 function addListOptions(command: Command): Command {
   return command
-    .option("--max-results <count>", "maximum number of messages")
+    .addOption(gmailMaxResultsOption("maximum number of messages"))
     .option("--page-token <token>", "pagination token")
     .option("--label <label>", "label name or id; repeat for multiple labels", collect)
     .option("--label-id <id>", "label id; repeat for multiple labels", collect)
-    .addOption(new Option("--include-spam-trash <boolean>", "include spam and trash").choices(["true", "false", "1", "0"]));
+    .addOption(includeSpamTrashOption());
 }
 
 function addThreadListOptions(command: Command): Command {
   return command
-    .option("--max-results <count>", "maximum number of threads")
+    .addOption(gmailMaxResultsOption("maximum number of threads"))
     .option("--page-token <token>", "pagination token")
     .option("--label <label>", "label name or id; repeat for multiple labels", collect)
-    .option("--label-id <id>", "label id; repeat for multiple labels", collect);
+    .option("--label-id <id>", "label id; repeat for multiple labels", collect)
+    .addOption(includeSpamTrashOption());
+}
+
+function gmailMaxResultsOption(description: string): Option {
+  return new Option("--max-results <count>", description).argParser((value) => parseCount(value, 500));
+}
+
+function positiveCountOption(description: string): Option {
+  return new Option("--max-results <count>", description).argParser((value) => parseCount(value));
+}
+
+function includeSpamTrashOption(): Option {
+  return new Option("--include-spam-trash <boolean>", "include spam and trash")
+    .choices(["true", "false", "1", "0"]);
+}
+
+function parseCount(value: string, maximum?: number): string {
+  const count = Number(value);
+  if (!/^\d+$/.test(value) || count < 1 || !Number.isSafeInteger(count)) {
+    throw new InvalidArgumentError("must be a positive integer");
+  }
+  if (maximum !== undefined && count > maximum) {
+    throw new InvalidArgumentError(`must not exceed ${maximum}`);
+  }
+  return value;
 }
 
 function addComposeOptions(command: Command): Command {

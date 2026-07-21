@@ -107,9 +107,12 @@ export function formatCommandOutput(value: unknown, argv: string[]): string {
     return `${stringValue(count)} message(s) ${command === "trash" ? "trashed" : "restored"}.`;
   }
   if (["modify", "markread", "markunread", "star", "unstar", "archive", "unarchive", "spam", "unspam"].includes(command)) {
-    return data === undefined || (asRecord(data) !== undefined && Object.keys(asRecord(data)!).length === 0)
-      ? "Messages updated."
-      : formatResource("Messages updated.", data);
+    const updated = stringValue(root.updated);
+    const batches = stringValue(root.batches);
+    return [
+      `${updated || "0"} message(s) updated.`,
+      ...(batches ? [`Batches: ${batches}`] : []),
+    ].join("\n");
   }
 
   return formatValue(data);
@@ -193,6 +196,7 @@ function formatThreadList(value: unknown): string {
   const lines = [`${threads.length} thread(s).`];
   lines.push(...threads.map((item) => stringValue(asRecord(item)?.id)).filter(Boolean));
   if (response.nextPageToken !== undefined) lines.push(`Next page: ${stringValue(response.nextPageToken)}`);
+  if (response.resultSizeEstimate !== undefined) lines.push(`Estimated total: ${stringValue(response.resultSizeEstimate)}`);
   return lines.join("\n");
 }
 
@@ -234,6 +238,7 @@ function formatDraftList(value: unknown): string {
     return [draft.id, message.id, message.threadId].map(stringValue).filter(Boolean).join("\t");
   }));
   if (response.nextPageToken !== undefined) lines.push(`Next page: ${stringValue(response.nextPageToken)}`);
+  if (response.resultSizeEstimate !== undefined) lines.push(`Estimated total: ${stringValue(response.resultSizeEstimate)}`);
   return lines.join("\n");
 }
 

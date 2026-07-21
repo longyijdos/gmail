@@ -1,4 +1,4 @@
-import { CliError, many, one } from "../cli";
+import { bool, CliError, many, one } from "../cli";
 import {
   base64urlDecode,
   createDraft,
@@ -29,7 +29,18 @@ export async function handleWriteCommand(context: CommandContext): Promise<unkno
   if (command === "reply") return reply(context);
   if (command === "forward") return forward(context);
   if (command === "draft") return draft(context);
-  if (command === "drafts") return { ok: true, data: await listDrafts({ maxResults: one(parsed.flags, "max-results"), oauthClient }) };
+  if (command === "drafts") {
+    return {
+      ok: true,
+      data: await listDrafts({
+        maxResults: one(parsed.flags, "max-results"),
+        pageToken: one(parsed.flags, "page-token"),
+        q: one(parsed.flags, "q"),
+        includeSpamTrash: bool(parsed.flags, "include-spam-trash"),
+        oauthClient,
+      }),
+    };
+  }
   if (command === "draft-send") {
     const id = subcommand ?? one(parsed.flags, "id");
     if (!id) throw new CliError("Missing draft id.", "draft_id_missing");

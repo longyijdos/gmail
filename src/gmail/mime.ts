@@ -1,4 +1,6 @@
 import { basename, extname } from "node:path";
+import emailAddresses from "email-addresses";
+import { CliError } from "../cli";
 
 export type AttachmentInput = {
   filename: string;
@@ -33,14 +35,18 @@ export function buildRaw(options: {
   inReplyTo?: string;
   references?: string;
 }): string {
+  const to = formatAddressInputs(options.to, "To", true);
+  const cc = formatAddressInputs(options.cc ?? [], "Cc");
+  const bcc = formatAddressInputs(options.bcc ?? [], "Bcc");
+  const from = options.from === undefined ? undefined : formatSingleAddress(options.from, "From");
   const headers = [
-    ...(options.from === undefined ? [] : [`From: ${options.from}`]),
-    `To: ${options.to.join(", ")}`,
-    ...(options.cc?.length ? [`Cc: ${options.cc.join(", ")}`] : []),
-    ...(options.bcc?.length ? [`Bcc: ${options.bcc.join(", ")}`] : []),
-    `Subject: ${encodeHeader(options.subject)}`,
-    ...(options.inReplyTo === undefined ? [] : [`In-Reply-To: ${options.inReplyTo}`]),
-    ...(options.references === undefined ? [] : [`References: ${options.references}`]),
+    ...(from === undefined ? [] : [`From: ${from}`]),
+    `To: ${to.join(", ")}`,
+    ...(cc.length ? [`Cc: ${cc.join(", ")}`] : []),
+    ...(bcc.length ? [`Bcc: ${bcc.join(", ")}`] : []),
+    `Subject: ${encodeHeader(assertHeaderValue(options.subject, "Subject"))}`,
+    ...(options.inReplyTo === undefined ? [] : [`In-Reply-To: ${assertHeaderValue(options.inReplyTo, "In-Reply-To")}`]),
+    ...(options.references === undefined ? [] : [`References: ${assertHeaderValue(options.references, "References")}`]),
     "MIME-Version: 1.0",
   ];
   const body = buildBody(options);
@@ -151,18 +157,20 @@ export function guessMimeType(filePath: string): string {
 
 export function parseAddresses(value: string): Array<{ name?: string; email: string; raw: string }> {
   if (!value) return [];
-  return value
-    .split(",")
-    .map((part) => {
-      const raw = part.trim();
-      const match = raw.match(/<([^>]+)>/);
-      const email = (match?.[1] ?? raw).trim();
-      const name = match?.index === undefined
-        ? undefined
-        : raw.slice(0, match.index).trim().replace(/^"|"$/g, "") || undefined;
-      return { ...(name === undefined ? {} : { name }), email, raw };
-    })
-    .filter((address) => address.email);
+  assertHeaderValue(value, "address");
+  const parsed = emailAddresses.parseAddressList({
+    input: value,
+    rfc6532: true,
+    strict: true,
+  });
+  if (parsed === null) {
+    throw new CliError("Invalid email address list.", "address_invalid", { value });
+  }
+  return parsed.flatMap((item) => item.type === "group" ? item.addresses : [item]).map((mailbox) => ({
+    ...(mailbox.name === null ? {} : { name: mailbox.name }),
+    email: mailbox.address,
+    raw: formatMailbox(mailbox.name, mailbox.address),
+  }));
 }
 
 function encodeHeader(value: string): string {
@@ -199,12 +207,15 @@ function buildBody(options: {
   const boundary = `mix_${crypto.randomUUID().replace(/-/g, "")}`;
   const bodyPart = [...bodyHeaders, "", body].join("\r\n");
   const attachmentParts = options.attachments.map((attachment) => {
-    const filename = encodeHeader(attachment.filename || basename(attachment.filename));
+    const filename = assertHeaderValue(attachment.filename || basename(attachment.filename) || "attachment", "attachment filename");
+    const fallbackFilename = filename.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "\\$&");
+    const encodedFilename = encodeParameter(filename);
+    const mimeType = safeMimeType(attachment.mimeType ?? guessMimeType(attachment.filename));
     return part(
       [
-        `Content-Type: ${attachment.mimeType ?? guessMimeType(attachment.filename)}; name="${filename}"`,
+        `Content-Type: ${mimeType}`,
         "Content-Transfer-Encoding: base64",
-        `Content-Disposition: attachment; filename="${filename}"`,
+        `Content-Disposition: attachment; filename="${fallbackFilename}"; filename*=UTF-8''${encodedFilename}`,
       ],
       Buffer.from(attachment.content).toString("base64"),
     );
@@ -232,4 +243,55 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
+}
+
+function formatAddressInputs(values: string[], headerName: string, required = false): string[] {
+  const addresses = values.flatMap((value) => parseAddresses(value));
+  if (required && addresses.length === 0) {
+    throw new CliError(`${headerName} requires at least one email address.`, "address_invalid", {
+      header: headerName,
+    });
+  }
+  return addresses.map((address) => address.raw);
+}
+
+function formatSingleAddress(value: string, headerName: string): string {
+  const addresses = parseAddresses(value);
+  if (addresses.length !== 1) {
+    throw new CliError(`${headerName} requires exactly one email address.`, "address_invalid", {
+      header: headerName,
+    });
+  }
+  return addresses[0]!.raw;
+}
+
+function formatMailbox(name: string | null, address: string): string {
+  const safeAddress = assertHeaderValue(address, "email address");
+  if (!name) return safeAddress;
+  const safeName = assertHeaderValue(name, "display name");
+  const phrase = /^[\x20-\x7E]*$/.test(safeName)
+    ? `"${safeName.replace(/["\\]/g, "\\$&")}"`
+    : encodeHeader(safeName);
+  return `${phrase} <${safeAddress}>`;
+}
+
+function assertHeaderValue(value: string, name: string): string {
+  if (/[\r\n\0]/.test(value)) {
+    throw new CliError(`${name} cannot contain line breaks or null bytes.`, "header_invalid", {
+      header: name,
+    });
+  }
+  return value;
+}
+
+function safeMimeType(value: string): string {
+  return /^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*\/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*$/.test(value)
+    ? value
+    : "application/octet-stream";
+}
+
+function encodeParameter(value: string): string {
+  return encodeURIComponent(value).replace(/[!'()*]/g, (character) =>
+    `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
 }

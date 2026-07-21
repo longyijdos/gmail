@@ -103,22 +103,68 @@ export async function resolveTargets(
   const result = [...ids];
   const query = one(flags, "query");
   if (query !== undefined) {
-    const response = (await listMessages({
-      q: query,
-      maxResults: one(flags, "max-results") ?? "100",
-      oauthClient,
-    })) as { messages?: Array<{ id?: string }> };
-    result.push(
-      ...(response.messages ?? []).flatMap((message) =>
-        message.id === undefined ? [] : [message.id],
-      ),
-    );
+    const maxResults = parsePositiveInteger(one(flags, "max-results"), "--max-results");
+    result.push(...await collectMessageIds(
+      (pageToken, pageSize) => listMessages({
+        q: query,
+        pageToken,
+        maxResults: String(pageSize),
+        oauthClient,
+      }) as Promise<MessageIdPage>,
+      maxResults,
+    ));
   }
   const unique = [...new Set(result)];
   if (unique.length === 0) {
     throw new CliError("No target messages. Pass ids or --query.", "target_missing");
   }
   return unique;
+}
+
+export type MessageIdPage = {
+  messages?: Array<{ id?: string }>;
+  nextPageToken?: string;
+};
+
+export async function collectMessageIds(
+  fetchPage: (pageToken: string | undefined, pageSize: number) => Promise<MessageIdPage>,
+  limit?: number,
+): Promise<string[]> {
+  const ids: string[] = [];
+  const seenIds = new Set<string>();
+  const seenPageTokens = new Set<string>();
+  let pageToken: string | undefined;
+
+  while (limit === undefined || ids.length < limit) {
+    const remaining = limit === undefined ? 500 : limit - ids.length;
+    const page = await fetchPage(pageToken, Math.min(500, remaining));
+    for (const message of page.messages ?? []) {
+      if (message.id === undefined || seenIds.has(message.id)) continue;
+      seenIds.add(message.id);
+      ids.push(message.id);
+      if (limit !== undefined && ids.length >= limit) break;
+    }
+
+    const nextPageToken = page.nextPageToken;
+    if (!nextPageToken || limit !== undefined && ids.length >= limit) break;
+    if (seenPageTokens.has(nextPageToken)) {
+      throw new CliError("Gmail returned a repeated page token.", "pagination_loop", {
+        pageToken: nextPageToken,
+      });
+    }
+    seenPageTokens.add(nextPageToken);
+    pageToken = nextPageToken;
+  }
+
+  return ids;
+}
+
+function parsePositiveInteger(value: string | undefined, name: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (!/^\d+$/.test(value) || Number(value) < 1 || !Number.isSafeInteger(Number(value))) {
+    throw new CliError(`${name} must be a positive integer.`, "args_invalid");
+  }
+  return Number(value);
 }
 
 export async function labelsForOrganize(
@@ -139,13 +185,21 @@ export async function labelsForOrganize(
     unspam: { add: ["INBOX"], remove: ["SPAM"] },
   };
   const preset = presets[command] ?? {};
+  const addLabelIds = [...new Set(await Promise.all(
+    [...(preset.add ?? []), ...add].map((label) => resolveLabelId(label, oauthClient)),
+  ))];
+  const removeLabelIds = [...new Set(await Promise.all(
+    [...(preset.remove ?? []), ...remove].map((label) => resolveLabelId(label, oauthClient)),
+  ))];
+  if (addLabelIds.length > 100 || removeLabelIds.length > 100) {
+    throw new CliError("Gmail allows at most 100 labels to be added or removed per modify request.", "label_limit_exceeded", {
+      add: addLabelIds.length,
+      remove: removeLabelIds.length,
+    });
+  }
   return {
-    addLabelIds: await Promise.all(
-      [...(preset.add ?? []), ...add].map((label) => resolveLabelId(label, oauthClient)),
-    ),
-    removeLabelIds: await Promise.all(
-      [...(preset.remove ?? []), ...remove].map((label) => resolveLabelId(label, oauthClient)),
-    ),
+    addLabelIds,
+    removeLabelIds,
   };
 }
 

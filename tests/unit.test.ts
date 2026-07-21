@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { expandScopes, GMAIL_SCOPES, normalizeScopes } from "../src/auth";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { expandScopes, GMAIL_SCOPES, hasAcceptedScope, normalizeScopes, saveCredentials } from "../src/auth";
 import { buildProgram, formatCommandOutput, parseArgs, wantsJson } from "../src/cli";
-import { encodeMime } from "../src/gmail";
+import { buildRaw, encodeMime, modifyMessages, parseAddresses, profile } from "../src/gmail";
+import { collectMessageIds } from "../src/commands/helpers";
 
 describe("args", () => {
   test("parses repeated flags and positionals", () => {
@@ -42,6 +46,14 @@ describe("args", () => {
       code: "commander.unknownOption",
     });
   });
+
+  test("validates Gmail list page sizes", async () => {
+    const program = buildProgram(async () => undefined)
+      .configureOutput({ writeErr: () => undefined, outputError: () => undefined });
+    await expect(program.parseAsync(["messages", "list", "--max-results", "501"], { from: "user" })).rejects.toMatchObject({
+      code: "commander.invalidArgument",
+    });
+  });
 });
 
 describe("text output", () => {
@@ -74,6 +86,94 @@ describe("text output", () => {
   test("does not enable JSON mode for auth commands", () => {
     expect(wantsJson(["auth", "status", "--json"])).toBe(false);
     expect(wantsJson(["profile", "--json"])).toBe(true);
+  });
+});
+
+describe("pagination", () => {
+  test("collects all message ids across pages", async () => {
+    const requested: Array<[string | undefined, number]> = [];
+    const ids = await collectMessageIds(async (pageToken, pageSize) => {
+      requested.push([pageToken, pageSize]);
+      if (pageToken === undefined) return { messages: [{ id: "a" }, { id: "b" }], nextPageToken: "page-2" };
+      return { messages: [{ id: "b" }, { id: "c" }] };
+    });
+    expect(ids).toEqual(["a", "b", "c"]);
+    expect(requested).toEqual([[undefined, 500], ["page-2", 500]]);
+  });
+
+  test("stops pagination at the requested total limit", async () => {
+    const requested: number[] = [];
+    const ids = await collectMessageIds(async (_pageToken, pageSize) => {
+      requested.push(pageSize);
+      return { messages: [{ id: "a" }, { id: "b" }, { id: "c" }], nextPageToken: "unused" };
+    }, 2);
+    expect(ids).toEqual(["a", "b"]);
+    expect(requested).toEqual([2]);
+  });
+});
+
+describe("Gmail API limits", () => {
+  test("splits batchModify requests at 1000 message ids", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "gml-test-"));
+    const previousHome = process.env.GML_HOME;
+    const previousFetch = globalThis.fetch;
+    const batchSizes: number[] = [];
+    try {
+      process.env.GML_HOME = directory;
+      await saveCredentials({
+        client: { clientId: "test-client" },
+        token: {
+          accessToken: "test-token",
+          tokenType: "Bearer",
+          expiresAt: Date.now() + 3_600_000,
+          scopes: [GMAIL_SCOPES.modify],
+        },
+      });
+      globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body)) as { ids: string[] };
+        batchSizes.push(body.ids.length);
+        return new Response(null, { status: 204 });
+      }) as unknown as typeof fetch;
+
+      await modifyMessages({ ids: Array.from({ length: 2001 }, (_, index) => `message-${index}`) });
+      expect(batchSizes).toEqual([1000, 1000, 1]);
+    } finally {
+      globalThis.fetch = previousFetch;
+      if (previousHome === undefined) delete process.env.GML_HOME;
+      else process.env.GML_HOME = previousHome;
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("accepts the compose scope for users.getProfile", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "gml-test-"));
+    const previousHome = process.env.GML_HOME;
+    const previousFetch = globalThis.fetch;
+    try {
+      process.env.GML_HOME = directory;
+      await saveCredentials({
+        client: { clientId: "test-client" },
+        token: {
+          accessToken: "test-token",
+          tokenType: "Bearer",
+          expiresAt: Date.now() + 3_600_000,
+          scopes: [GMAIL_SCOPES.compose],
+        },
+      });
+      globalThis.fetch = (async () => Response.json({
+        emailAddress: "agent@example.com",
+        messagesTotal: 1,
+        threadsTotal: 1,
+        historyId: "10",
+      })) as unknown as typeof fetch;
+
+      await expect(profile()).resolves.toMatchObject({ emailAddress: "agent@example.com" });
+    } finally {
+      globalThis.fetch = previousFetch;
+      if (previousHome === undefined) delete process.env.GML_HOME;
+      else process.env.GML_HOME = previousHome;
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });
 
@@ -116,6 +216,12 @@ describe("scopes", () => {
       removed: [],
     });
   });
+
+  test("accepts any scope supported by an operation", () => {
+    expect(hasAcceptedScope([GMAIL_SCOPES.readonly, GMAIL_SCOPES.compose], [GMAIL_SCOPES.compose])).toBe(true);
+    expect(hasAcceptedScope([GMAIL_SCOPES.readonly, GMAIL_SCOPES.metadata], [GMAIL_SCOPES.metadata])).toBe(true);
+    expect(hasAcceptedScope([GMAIL_SCOPES.readonly], [GMAIL_SCOPES.metadata])).toBe(false);
+  });
 });
 
 describe("mime", () => {
@@ -126,5 +232,34 @@ describe("mime", () => {
     expect(decoded).toContain("Subject: Hi");
     expect(decoded).toContain("Content-Transfer-Encoding: base64");
     expect(decoded).toContain(Buffer.from("Body").toString("base64"));
+  });
+
+  test("parses quoted display names containing commas", () => {
+    expect(parseAddresses('"Doe, Jane" <jane@example.com>, Bob <bob@example.com>')).toEqual([
+      { name: "Doe, Jane", email: "jane@example.com", raw: '"Doe, Jane" <jane@example.com>' },
+      { name: "Bob", email: "bob@example.com", raw: '"Bob" <bob@example.com>' },
+    ]);
+  });
+
+  test("rejects MIME header injection", () => {
+    expect(() => buildRaw({
+      to: ["a@example.com"],
+      subject: "Hello\r\nBcc: attacker@example.com",
+      text: "Body",
+    })).toThrow("Subject cannot contain line breaks");
+    expect(() => buildRaw({
+      to: ["a@example.com\r\nBcc: attacker@example.com"],
+      subject: "Hello",
+      text: "Body",
+    })).toThrow("address cannot contain line breaks");
+  });
+
+  test("encodes attachment filenames without injecting headers", () => {
+    expect(() => buildRaw({
+      to: ["a@example.com"],
+      subject: "Attachment",
+      text: "Body",
+      attachments: [{ filename: "report.pdf\r\nX-Test: yes", content: Buffer.from("test") }],
+    })).toThrow("attachment filename cannot contain line breaks");
   });
 });
