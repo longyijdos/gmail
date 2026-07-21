@@ -184,6 +184,45 @@ describe("Gmail API limits", () => {
   });
 });
 
+describe("Gmail API client", () => {
+  test("constructs the correct URL with /gmail/v1/ prefix", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "gml-test-"));
+    const previousHome = process.env.GML_HOME;
+    const previousFetch = globalThis.fetch;
+    let requestedUrl = "";
+    try {
+      process.env.GML_HOME = directory;
+      await saveCredentials({
+        client: { clientId: "test-client" },
+        token: {
+          accessToken: "test-token",
+          tokenType: "Bearer",
+          expiresAt: Date.now() + 3_600_000,
+          scopes: [GMAIL_SCOPES.readonly],
+        },
+      });
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        requestedUrl = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        return Response.json({
+          emailAddress: "test@example.com",
+          messagesTotal: 1,
+          threadsTotal: 1,
+          historyId: "1",
+        });
+      }) as unknown as typeof fetch;
+
+      await profile();
+      expect(requestedUrl).toStartWith("https://gmail.googleapis.com/gmail/v1/");
+      expect(requestedUrl).toContain("/users/me/profile");
+    } finally {
+      globalThis.fetch = previousFetch;
+      if (previousHome === undefined) delete process.env.GML_HOME;
+      else process.env.GML_HOME = previousHome;
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("scopes", () => {
   test("expands aliases and deduplicates", () => {
     expect(expandScopes(["readonly,send", "send"])).toEqual([

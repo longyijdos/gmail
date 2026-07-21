@@ -15,7 +15,7 @@ export type RequestOptions = {
 
 export async function gmailRequest(options: RequestOptions): Promise<unknown> {
   const token = await getAccessToken(options.acceptedScopes, options.oauthClient);
-  const url = new URL(normalizePath(options.path), GMAIL_BASE);
+  const url = new URL(GMAIL_BASE + normalizePath(options.path));
   for (const [key, value] of Object.entries(options.query ?? {})) {
     if (value === undefined) continue;
     if (Array.isArray(value)) {
