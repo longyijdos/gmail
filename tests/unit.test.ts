@@ -2,7 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expandScopes, GMAIL_SCOPES, hasAcceptedScope, normalizeScopes, saveCredentials } from "../src/auth";
+import {
+  expandScopes,
+  GMAIL_SCOPES,
+  hasAcceptedScope,
+  normalizeScopes,
+  saveCredentials,
+  startCallbackServer,
+} from "../src/auth";
 import { buildProgram, formatCommandOutput, parseArgs, wantsJson } from "../src/cli";
 import { buildRaw, encodeMime, modifyMessages, parseAddresses, profile } from "../src/gmail";
 import { collectMessageIds } from "../src/commands/helpers";
@@ -221,6 +228,25 @@ describe("scopes", () => {
     expect(hasAcceptedScope([GMAIL_SCOPES.readonly, GMAIL_SCOPES.compose], [GMAIL_SCOPES.compose])).toBe(true);
     expect(hasAcceptedScope([GMAIL_SCOPES.readonly, GMAIL_SCOPES.metadata], [GMAIL_SCOPES.metadata])).toBe(true);
     expect(hasAcceptedScope([GMAIL_SCOPES.readonly], [GMAIL_SCOPES.metadata])).toBe(false);
+  });
+});
+
+describe("OAuth callback", () => {
+  test("responds once and resolves the authorization code", async () => {
+    const callback = await startCallbackServer();
+    try {
+      const code = callback.waitForCode("expected-state");
+      const url = new URL(callback.redirectUri);
+      url.searchParams.set("state", "expected-state");
+      url.searchParams.set("code", "authorization-code");
+
+      const response = await fetch(url);
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe("Authorization complete. You can return to gml.");
+      await expect(code).resolves.toBe("authorization-code");
+    } finally {
+      await callback.close();
+    }
   });
 });
 

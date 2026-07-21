@@ -289,16 +289,22 @@ function isUsable(token: StoredToken): boolean {
   return token.expiresAt === undefined || token.expiresAt - REFRESH_SKEW_MS > Date.now();
 }
 
-type CallbackServer = {
+export type CallbackServer = {
   redirectUri: string;
   waitForCode(state: string): Promise<string>;
   close(): Promise<void>;
 };
 
-async function startCallbackServer(): Promise<CallbackServer> {
+export async function startCallbackServer(): Promise<CallbackServer> {
   const server = createServer();
   let pending: ((url: URL, response: ServerResponse) => void) | undefined;
-  server.on("request", (request, response) => pending?.(new URL(request.url ?? "/", "http://127.0.0.1"), response) ?? respond(response, 409, "No OAuth login is pending."));
+  server.on("request", (request, response) => {
+    if (pending === undefined) {
+      respond(response, 409, "No OAuth login is pending.");
+      return;
+    }
+    pending(new URL(request.url ?? "/", "http://127.0.0.1"), response);
+  });
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", () => resolve());
