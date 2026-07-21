@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
-import { runCommand } from "./commands";
-import { errorToJson, exitCodeFor, writeJson } from "./cli";
+import { errorToJson, executeCommand, exitCodeFor, writeJson } from "./cli";
 
-runCommand(process.argv.slice(2))
-  .then(writeJson)
+executeCommand(process.argv.slice(2))
+  .then((result) => {
+    if (result !== undefined) writeJson(result);
+  })
   .catch((error) => {
     writeJson(errorToJson(error));
     process.exitCode = exitCodeFor(error);

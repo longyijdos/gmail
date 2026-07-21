@@ -69,8 +69,8 @@ export async function handleReadCommand(context: CommandContext): Promise<unknow
 }
 
 async function readMessage(context: CommandContext): Promise<unknown> {
-  const { parsed, command, rest, oauthClient } = context;
-  const id = rest[0] ?? one(parsed.flags, "id");
+  const { parsed, command, subcommand, rest, oauthClient } = context;
+  const id = (command === "read" ? subcommand : rest[0]) ?? one(parsed.flags, "id");
   if (!id) throw new CliError("Missing message id.", "message_id_missing");
   if (command === "read") {
     const raw = one(parsed.flags, "raw");

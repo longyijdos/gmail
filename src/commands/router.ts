@@ -1,5 +1,4 @@
-import { CliError, parseArgs, one } from "../cli";
-import { help } from "./help";
+import { CliError, parseArgs } from "../cli";
 import { handleAuthCommand } from "./auth";
 import { handleLabelCommand } from "./labels";
 import { handleOrganizeCommand } from "./organize";
@@ -26,9 +25,7 @@ const ORGANIZE_COMMANDS = new Set([
 export async function runCommand(argv: string[]): Promise<unknown> {
   const parsed = parseArgs(argv);
   const [command, subcommand, ...rest] = parsed.positionals;
-  if (command === undefined || command === "help" || one(parsed.flags, "help") !== undefined) {
-    return help();
-  }
+  if (command === undefined) throw new CliError("Missing command.", "command_missing");
 
   if (command === "auth") {
     const response = await handleAuthCommand({ parsed, command, subcommand, rest });

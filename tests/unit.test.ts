@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { expandScopes, GMAIL_SCOPES, normalizeScopes } from "../src/auth";
-import { parseArgs } from "../src/cli";
+import { buildProgram, parseArgs } from "../src/cli";
 import { encodeMime } from "../src/gmail";
 
 describe("args", () => {
@@ -9,6 +9,23 @@ describe("args", () => {
       positionals: ["messages", "list"],
       flags: { "label-id": ["INBOX", "SENT"] },
     });
+  });
+
+  test("commander rejects unknown options", async () => {
+    const program = buildProgram(async () => undefined)
+      .configureOutput({ writeErr: () => undefined, outputError: () => undefined });
+    await expect(program.parseAsync(["list", "--max-result", "10"], { from: "user" })).rejects.toMatchObject({
+      code: "commander.unknownOption",
+    });
+  });
+
+  test("commander accepts global OAuth options after nested commands", async () => {
+    let called = false;
+    const program = buildProgram(async () => {
+      called = true;
+    });
+    await program.parseAsync(["auth", "login", "--client-id", "test", "--scope", "readonly"], { from: "user" });
+    expect(called).toBe(true);
   });
 });
 

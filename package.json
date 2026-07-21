@@ -32,5 +32,8 @@
   },
   "engines": {
     "bun": ">=1.2.0"
+  },
+  "dependencies": {
+    "commander": "^15.0.0"
   }
 }

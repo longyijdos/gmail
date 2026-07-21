@@ -76,7 +76,13 @@ The credentials file is written with private file mode `0600`; the directory is 
 
 ## Commands
 
-All output is JSON, including errors.
+Command results and errors are JSON. Help and version output are plain text.
+
+```sh
+gml --help
+gml help send
+gml --version
+```
 
 ```sh
 gml auth status
