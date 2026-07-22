@@ -54,6 +54,7 @@ IDs do not require a query limit.
 - Errors go to stderr and set a nonzero exit code.
 - Help, version, and authorization commands are always text.
 - Gmail API commands use command-specific text by default.
+- Tabular text output starts with stable uppercase column names.
 - With `--json`, successful Gmail results are JSON on stdout and runtime errors
   are JSON on stderr.
 - Argument parsing errors occur before a command invocation is available and are

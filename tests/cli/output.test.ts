@@ -15,7 +15,9 @@ describe("text output", () => {
         },
         "messages.list",
       ),
-    ).toBe(["1 message(s).", "message-1\tthread-1", "Next page: next-token", "Estimated total: 12"].join("\n"));
+    ).toBe(
+      ["1 message(s).", "ID\tTHREAD", "message-1\tthread-1", "Next page: next-token", "Estimated total: 12"].join("\n"),
+    );
   });
 
   test("formats message summaries for agent scanning", () => {
@@ -127,5 +129,35 @@ describe("text output", () => {
         "messages.archive",
       ),
     ).toBe(["Dry run: 2 message(s) matched.", "message-1", "message-2"].join("\n"));
+  });
+
+  test("adds stable headers to tabular collections", () => {
+    expect(
+      formatCommandOutput(
+        { ok: true, data: { labels: [{ id: "INBOX", name: "INBOX", type: "system" }] } },
+        "labels.list",
+      ),
+    ).toBe("ID\tNAME\tTYPE\nINBOX\tINBOX\tsystem");
+    expect(formatCommandOutput({ ok: true, data: { threads: [{ id: "thread-1" }] } }, "threads.list")).toBe(
+      "1 thread(s).\nTHREAD\nthread-1",
+    );
+    expect(
+      formatCommandOutput(
+        {
+          ok: true,
+          data: { drafts: [{ id: "draft-1", message: { id: "message-1", threadId: "thread-1" } }] },
+        },
+        "drafts.list",
+      ),
+    ).toBe("1 draft(s).\nDRAFT\tMESSAGE\tTHREAD\ndraft-1\tmessage-1\tthread-1");
+    expect(
+      formatCommandOutput(
+        {
+          ok: true,
+          data: [{ filename: "report.pdf", mimeType: "application/pdf", size: 42, attachmentId: "part-1" }],
+        },
+        "messages.attachments",
+      ),
+    ).toBe("FILENAME\tMIME_TYPE\tSIZE\tATTACHMENT\nreport.pdf\tapplication/pdf\t42 bytes\tpart-1");
   });
 });

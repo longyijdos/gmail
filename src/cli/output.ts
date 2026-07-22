@@ -105,12 +105,13 @@ function formatProfile(value: unknown): string {
 function formatLabels(value: unknown): string {
   const labels = arrayValue(asRecord(value)?.labels);
   if (labels.length === 0) return "No labels.";
-  return labels
-    .map((item) => {
+  return [
+    "ID\tNAME\tTYPE",
+    ...labels.map((item) => {
       const label = asRecord(item) ?? {};
       return [label.id, label.name, label.type].map(stringValue).filter(Boolean).join("\t");
-    })
-    .join("\n");
+    }),
+  ].join("\n");
 }
 
 function formatLabel(value: unknown): string {
@@ -127,12 +128,15 @@ function formatMessageList(value: unknown): string {
     lines.push("ID\tTHREAD\tDATE\tFROM\tSUBJECT\tLABELS");
     lines.push(...summaries.flatMap((item) => formatMessageSummary(item)));
   } else {
-    lines.push(
-      ...messages.map((item) => {
-        const message = asRecord(item) ?? {};
-        return [message.id, message.threadId].map(stringValue).filter(Boolean).join("\t");
-      }),
-    );
+    if (messages.length > 0) {
+      lines.push("ID\tTHREAD");
+      lines.push(
+        ...messages.map((item) => {
+          const message = asRecord(item) ?? {};
+          return [message.id, message.threadId].map(stringValue).filter(Boolean).join("\t");
+        }),
+      );
+    }
   }
   if (response.nextPageToken !== undefined) lines.push(`Next page: ${stringValue(response.nextPageToken)}`);
   if (response.resultSizeEstimate !== undefined)
@@ -191,7 +195,10 @@ function formatThreadList(value: unknown): string {
     lines.push("THREAD\tMESSAGES\tLATEST_MESSAGE\tDATE\tFROM\tSUBJECT\tLABELS");
     lines.push(...summaries.flatMap((item) => formatThreadSummary(item)));
   } else {
-    lines.push(...threads.map((item) => stringValue(asRecord(item)?.id)).filter(Boolean));
+    if (threads.length > 0) {
+      lines.push("THREAD");
+      lines.push(...threads.map((item) => stringValue(asRecord(item)?.id)).filter(Boolean));
+    }
   }
   if (response.nextPageToken !== undefined) lines.push(`Next page: ${stringValue(response.nextPageToken)}`);
   if (response.resultSizeEstimate !== undefined)
@@ -226,16 +233,17 @@ function formatThreadSummary(value: unknown): string[] {
 function formatAttachments(value: unknown): string {
   const attachments = arrayValue(value);
   if (attachments.length === 0) return "No attachments.";
-  return attachments
-    .map((item) => {
+  return [
+    "FILENAME\tMIME_TYPE\tSIZE\tATTACHMENT",
+    ...attachments.map((item) => {
       const attachment = asRecord(item) ?? {};
       const size = attachment.size === undefined ? "" : `${stringValue(attachment.size)} bytes`;
       return [attachment.filename, attachment.mimeType, size, attachment.attachmentId]
         .map(stringValue)
         .filter(Boolean)
         .join("\t");
-    })
-    .join("\n");
+    }),
+  ].join("\n");
 }
 
 function formatDownloads(value: unknown): string {
@@ -243,6 +251,7 @@ function formatDownloads(value: unknown): string {
   if (downloads.length === 0) return "No attachments downloaded.";
   return [
     `${downloads.length} attachment(s) downloaded.`,
+    "FILE\tSIZE",
     ...downloads.map((item) => {
       const download = asRecord(item) ?? {};
       return [download.file, download.bytes === undefined ? "" : `${stringValue(download.bytes)} bytes`]
@@ -262,13 +271,16 @@ function formatDraftList(value: unknown): string {
   const response = asRecord(value) ?? {};
   const drafts = arrayValue(response.drafts);
   const lines = [`${drafts.length} draft(s).`];
-  lines.push(
-    ...drafts.map((item) => {
-      const draft = asRecord(item) ?? {};
-      const message = asRecord(draft.message) ?? {};
-      return [draft.id, message.id, message.threadId].map(stringValue).filter(Boolean).join("\t");
-    }),
-  );
+  if (drafts.length > 0) {
+    lines.push("DRAFT\tMESSAGE\tTHREAD");
+    lines.push(
+      ...drafts.map((item) => {
+        const draft = asRecord(item) ?? {};
+        const message = asRecord(draft.message) ?? {};
+        return [draft.id, message.id, message.threadId].map(stringValue).filter(Boolean).join("\t");
+      }),
+    );
+  }
   if (response.nextPageToken !== undefined) lines.push(`Next page: ${stringValue(response.nextPageToken)}`);
   if (response.resultSizeEstimate !== undefined)
     lines.push(`Estimated total: ${stringValue(response.resultSizeEstimate)}`);
