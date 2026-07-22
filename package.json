@@ -14,7 +14,12 @@
   ],
   "scripts": {
     "build": "bun build src/main.ts --target=bun --outfile=dist/gml.js && chmod +x dist/gml.js",
-    "check": "bun run typecheck && bun test",
+    "check": "biome check . && bun run typecheck && bun test",
+    "check:fix": "biome check --write . && bun run typecheck && bun test",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
     "prepack": "bun run check && bun run build",
     "typecheck": "tsc --noEmit",
     "dev": "bun src/main.ts"
