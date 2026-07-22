@@ -1,6 +1,6 @@
-import { one, readJsonFlag } from "../cli/args";
-import { CliError } from "../errors";
-import { gmailRequest } from "../gmail";
+import { one, readJsonFlag } from "@/cli";
+import { gmailRequest } from "@/gmail";
+import { CliError } from "@/utils";
 import type { CommandContext } from "./types";
 
 export async function handleRequestCommand(context: CommandContext): Promise<unknown | undefined> {

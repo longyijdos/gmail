@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { createServer, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import { CliError } from "@/utils";
 import {
   type OAuthClient,
   type StoredToken,
@@ -9,7 +10,6 @@ import {
   loadCredentials,
   saveCredentials,
 } from "./credentials";
-import { CliError } from "../errors";
 
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";

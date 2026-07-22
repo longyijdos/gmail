@@ -1,7 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { bool, many, one } from "../cli/args";
-import { CliError } from "../errors";
+import { bool, many, one } from "@/cli";
 import {
   base64urlDecode,
   extractBody,
@@ -13,7 +12,8 @@ import {
   listMessages,
   listThreads,
   profile,
-} from "../gmail";
+} from "@/gmail";
+import { CliError } from "@/utils";
 import { resolveLabelFlags } from "./helpers";
 import type { CommandContext } from "./types";
 

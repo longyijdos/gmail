@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, rm, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { CliError } from "../errors";
+import { CliError } from "@/utils";
 
 export const APP_NAME = "gml";
 export const CREDENTIALS_FILE_VERSION = 1;

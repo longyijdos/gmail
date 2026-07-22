@@ -1,5 +1,5 @@
-import { parseArgs } from "../cli/args";
-import { CliError } from "../errors";
+import { parseArgs } from "@/cli";
+import { CliError } from "@/utils";
 import { handleAuthCommand } from "./auth";
 import { handleLabelCommand } from "./labels";
 import { handleOrganizeCommand } from "./organize";

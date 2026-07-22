@@ -1,4 +1,4 @@
-import { modifyMessages, messageAction } from "../gmail";
+import { modifyMessages, messageAction } from "@/gmail";
 import { labelsForOrganize, resolveTargets } from "./helpers";
 import type { CommandContext } from "./types";
 

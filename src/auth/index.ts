@@ -19,6 +19,8 @@ export {
   hasAcceptedScope,
   login,
   normalizeScopes,
+  startCallbackServer,
+  type CallbackServer,
   type LoginOptions,
   type NormalizedScopes,
 } from "./oauth";

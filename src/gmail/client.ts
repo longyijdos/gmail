@@ -1,5 +1,5 @@
-import { getAccessToken, GMAIL_SCOPES, type OAuthClient } from "../auth";
-import { CliError } from "../errors";
+import { getAccessToken, GMAIL_SCOPES, type OAuthClient } from "@/auth";
+import { CliError } from "@/utils";
 import { buildRaw, type AttachmentInput } from "./mime";
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1";

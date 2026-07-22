@@ -8,12 +8,12 @@ import {
   hasAcceptedScope,
   login,
   normalizeScopes,
-} from "../src/auth";
-import { saveCredentials } from "../src/auth/credentials";
-import { startCallbackServer } from "../src/auth/oauth";
-import { buildProgram, formatCommandOutput, parseArgs, wantsJson } from "../src/cli";
-import { buildRaw, encodeMime, modifyMessages, parseAddresses, profile } from "../src/gmail";
-import { collectMessageIds } from "../src/commands/helpers";
+  saveCredentials,
+  startCallbackServer,
+} from "@/auth";
+import { buildProgram, formatCommandOutput, parseArgs, wantsJson } from "@/cli";
+import { collectMessageIds } from "@/commands";
+import { buildRaw, encodeMime, modifyMessages, parseAddresses, profile } from "@/gmail";
 
 describe("args", () => {
   test("parses repeated flags and positionals", () => {

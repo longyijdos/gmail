@@ -1,4 +1,4 @@
-import { CliError } from "../errors";
+import { CliError } from "@/utils";
 
 export type JsonObject = Record<string, unknown>;
 

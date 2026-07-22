@@ -1,5 +1,4 @@
-import { bool, many, one } from "../cli/args";
-import { CliError } from "../errors";
+import { bool, many, one } from "@/cli";
 import {
   base64urlDecode,
   createDraft,
@@ -15,7 +14,8 @@ import {
   sendDraft,
   sendMessage,
   type AttachmentInput,
-} from "../gmail";
+} from "@/gmail";
+import { CliError } from "@/utils";
 import {
   escapeHtml,
   resolveAttachments,

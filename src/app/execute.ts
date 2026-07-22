@@ -1,7 +1,7 @@
 import { CommanderError } from "commander";
-import { buildProgram } from "./cli/program";
-import { runCommand } from "./commands";
-import { CliError } from "./errors";
+import { buildProgram } from "@/cli";
+import { runCommand } from "@/commands";
+import { CliError } from "@/utils";
 
 export async function executeCommand(argv: string[]): Promise<unknown | undefined> {
   let result: unknown | undefined;
