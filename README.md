@@ -164,9 +164,24 @@ Agent-oriented workflows and the output contract are documented in
 
 ## npm release
 
+Releases are published by [GitHub Actions](.github/workflows/publish.yml) through
+npm trusted publishing. The tag must match the version in `package.json`.
+
 ```sh
-npm pack --dry-run
-npm publish --access public
+npm version patch --no-git-tag-version
+bun run check
+git add package.json
+git commit -m "chore(release): v0.1.1"
+git tag -a v0.1.1 -m "v0.1.1"
+git push origin main v0.1.1
 ```
 
-The package `prepack` hook runs the full checks and rebuilds `dist/gml.js`.
+To inspect the package without publishing:
+
+```sh
+npm pack --dry-run
+```
+
+The package `prepack` hook runs the full checks and rebuilds `dist/gml.js`. The
+release workflow uses the `npm` GitHub Environment and does not store an npm
+token in repository secrets.

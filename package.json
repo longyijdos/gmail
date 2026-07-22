@@ -32,6 +32,18 @@
     "agent",
     "automation"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/longyijdos/gmail.git"
+  },
+  "homepage": "https://github.com/longyijdos/gmail#readme",
+  "bugs": {
+    "url": "https://github.com/longyijdos/gmail/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "license": "MIT",
   "devDependencies": {
     "@biomejs/biome": "2.5.4",
