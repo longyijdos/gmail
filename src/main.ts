@@ -1,7 +1,9 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 import { executeCommand } from "@/app";
 import { exitCodeFor, writeCommandError, writeCommandOutput } from "@/cli";
+import { configureProxyFromEnvironment } from "@/utils";
 
+configureProxyFromEnvironment();
 const outcome = await executeCommand(process.argv.slice(2));
 
 if (outcome.ok) {

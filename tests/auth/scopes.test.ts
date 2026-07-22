@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { expandScopes, GMAIL_SCOPES, hasAcceptedScope, normalizeScopes } from "@/auth";
 
 describe("Gmail scopes", () => {

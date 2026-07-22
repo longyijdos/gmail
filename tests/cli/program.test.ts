@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { buildProgram } from "@/cli";
 import type { CommandInvocation } from "@/commands";
 

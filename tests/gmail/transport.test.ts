@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { GMAIL_SCOPES } from "@/auth";
 import { gmailRequest, profile } from "@/gmail";
 import { withGmailSandbox } from "../support";
@@ -21,7 +21,7 @@ describe("Gmail API transport", () => {
       },
       async () => {
         await profile();
-        expect(requestedUrl).toStartWith("https://gmail.googleapis.com/gmail/v1/");
+        expect(requestedUrl.startsWith("https://gmail.googleapis.com/gmail/v1/")).toBe(true);
         expect(requestedUrl).toContain("/users/me/profile");
       },
     );

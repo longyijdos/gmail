@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { authStatus, GMAIL_SCOPES, login, startCallbackServer } from "@/auth";
 import { withGmailSandbox, withMockFetch, withNativeFetch } from "../support";
 

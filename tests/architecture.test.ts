@@ -1,9 +1,10 @@
-import { describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
+import { describe, expect, test } from "vitest";
 
-const SOURCE_ROOT = join(import.meta.dir, "../src");
-const TEST_ROOT = import.meta.dir;
+const SOURCE_ROOT = join(import.meta.dirname, "../src");
+const TEST_ROOT = import.meta.dirname;
 
 describe("module boundaries", () => {
   test("every top-level module exposes an index barrel", async () => {
@@ -11,7 +12,7 @@ describe("module boundaries", () => {
     const modules = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
 
     for (const module of modules) {
-      expect(await Bun.file(join(SOURCE_ROOT, module, "index.ts")).exists()).toBe(true);
+      expect(existsSync(join(SOURCE_ROOT, module, "index.ts"))).toBe(true);
     }
   });
 

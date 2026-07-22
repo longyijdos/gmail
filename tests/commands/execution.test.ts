@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { executeCommand } from "@/app";
 import { GMAIL_SCOPES } from "@/auth";
 import { collectMessageIds } from "@/commands";

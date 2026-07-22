@@ -8,10 +8,10 @@
       "@/*": ["./src/*"]
     },
     "lib": ["ES2022", "DOM"],
-    "types": ["bun", "node"],
+    "types": ["node", "vitest/globals"],
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts", "vitest.config.ts"]
 }

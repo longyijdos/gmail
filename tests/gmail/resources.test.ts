@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { GMAIL_SCOPES } from "@/auth";
 import { modifyMessages, profile } from "@/gmail";
 import { withGmailSandbox } from "../support";

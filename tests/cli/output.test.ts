@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "vitest";
 import { formatCommandOutput } from "@/cli";
 
 describe("text output", () => {
@@ -69,11 +69,17 @@ describe("text output", () => {
 
   test("distinguishes refreshable and terminal token expiry", () => {
     expect(
-      formatCommandOutput({ ok: true, authorized: true, state: "refresh_required", refreshable: true }, "auth.status"),
-    ).toStartWith("Authorized; access token refresh required.\nState: refresh_required");
+      formatCommandOutput(
+        { ok: true, authorized: true, state: "refresh_required", refreshable: true },
+        "auth.status",
+      ).startsWith("Authorized; access token refresh required.\nState: refresh_required"),
+    ).toBe(true);
     expect(
-      formatCommandOutput({ ok: true, authorized: false, state: "expired", refreshable: false }, "auth.status"),
-    ).toStartWith("Authorization expired.\nState: expired");
+      formatCommandOutput(
+        { ok: true, authorized: false, state: "expired", refreshable: false },
+        "auth.status",
+      ).startsWith("Authorization expired.\nState: expired"),
+    ).toBe(true);
   });
 
   test("marks truncated message bodies", () => {

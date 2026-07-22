@@ -25,10 +25,10 @@ export async function resolveBody(options: CommandOptions): Promise<{ text?: str
   const content =
     bodyFile !== undefined
       ? bodyFile === "-"
-        ? await Bun.stdin.text()
+        ? await readStdin()
         : await readTextFile(bodyFile, "message body")
       : bodyValue === "-"
-        ? await Bun.stdin.text()
+        ? await readStdin()
         : bodyValue;
   if (content === undefined) {
     throw new CliError("Missing --body, --text, or --body-file.", "body_missing");
@@ -36,6 +36,14 @@ export async function resolveBody(options: CommandOptions): Promise<{ text?: str
   return options.html === true
     ? { html: content, ...(options.text === undefined ? {} : { text: options.text }) }
     : { text: content };
+}
+
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks).toString("utf8");
 }
 
 export async function resolveOptionalBody(options: CommandOptions): Promise<{ text?: string; html?: string }> {

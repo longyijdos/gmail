@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { createServer, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -431,8 +432,15 @@ async function openBrowser(url: string): Promise<void> {
   if (command === undefined) {
     throw new CliError(`Opening a browser is not supported on ${process.platform}.`, "browser_unsupported");
   }
-  const child = Bun.spawn(command, { stdin: "ignore", stdout: "ignore", stderr: "ignore" });
-  const exitCode = await child.exited;
+  const exitCode = await new Promise<number>((resolve, reject) => {
+    const child = spawn(command[0], command.slice(1), { stdio: "ignore" });
+    child.once("error", reject);
+    child.once("exit", (code) => resolve(code ?? 1));
+  }).catch((error: unknown) => {
+    throw new CliError("Failed to open browser for OAuth login.", "browser_open_failed", {
+      cause: errorMessage(error),
+    });
+  });
   if (exitCode !== 0)
     throw new CliError("Failed to open browser for OAuth login.", "browser_open_failed", { exitCode });
 }
