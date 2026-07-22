@@ -11,7 +11,8 @@ Discovery document, revision `20260713`, and the current REST reference:
 `gml --json` wraps successful API data in the CLI's `{ "ok": true, ... }`
 envelope. The `data` field follows the response type listed below unless the
 command is a normalized convenience command such as `read`, `attachments`, or
-`download`.
+`download`. Message lists requested with `--summary` retain the list response
+and add a `summaries` array built from `users.messages.get(format=metadata)`.
 
 | Commands | Gmail API method | Successful API response |
 | --- | --- | --- |
@@ -37,8 +38,9 @@ command is a normalized convenience command such as `read`, `attachments`, or
 ## Enforced API limits
 
 - Message, thread, and draft list pages accept `maxResults` from 1 through 500.
-- Query-based organize commands follow every `nextPageToken` by default.
-  Their `--max-results` option is a total safety limit rather than a page size.
+- Query-based organize commands require `--max-results` or an explicit `--all`.
+  They follow `nextPageToken` until that total limit is reached, or until all
+  pages are exhausted for `--all`. `--dry-run` resolves targets without writing.
 - `users.messages.batchModify` is split into requests of at most 1000 message
   IDs.
 - Modify requests reject more than 100 labels in either the add or remove set.

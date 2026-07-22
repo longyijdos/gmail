@@ -1,6 +1,9 @@
 # gml
 
-`gml` is a stateless, JSON-first Gmail CLI for agents and scripts. It uses Google's OAuth 2.0 installed-app flow and the official Gmail REST API. It does not run a daemon.
+`gml` is a Gmail CLI for agents and scripts. It prints concise, command-specific
+text by default and offers structured JSON for Gmail API commands. It uses
+Google's OAuth 2.0 installed-app flow and the Gmail REST API without running a
+daemon.
 
 ## Install
 
@@ -95,8 +98,13 @@ gml --version
 
 ```sh
 gml messages list --q 'is:unread' --max-results 10
+gml messages list --q 'is:unread' --max-results 10 --summary
 gml messages list --q 'is:unread' --max-results 10 --json
 ```
+
+`--summary` adds sender, date, subject, labels, and snippet while keeping the
+list compact. It performs one metadata request per listed message with bounded
+concurrency. Use `--json` when the caller needs the complete response envelope.
 
 ```sh
 gml auth status
@@ -112,6 +120,7 @@ gml read MESSAGE_ID
 gml threads 'from:alice@example.com'
 gml attachments MESSAGE_ID
 gml download MESSAGE_ID --out ./attachments
+gml download MESSAGE_ID --out ./attachments --force
 gml send --to bob@example.com --subject 'hello' --body 'Body'
 gml send --to bob@example.com --subject 'hello' --html --body-file note.html --attach report.pdf
 gml reply MESSAGE_ID --body 'Thanks' --all
@@ -119,23 +128,28 @@ gml forward MESSAGE_ID --to carol@example.com --body 'FYI'
 gml draft --to bob@example.com --subject 'Draft' --body 'Body'
 gml draft-send DRAFT_ID
 gml modify MESSAGE_ID --add STARRED --remove UNREAD
-gml markread --query 'is:unread older_than:30d'
+gml markread --query 'is:unread older_than:30d' --max-results 100 --dry-run
+gml markread --query 'is:unread older_than:30d' --max-results 100
 gml archive MESSAGE_ID
 gml request GET /users/me/messages
 gml request POST /users/me/messages/send --body '{"raw":"..."}'
 ```
 
-Query-based organize commands follow all result pages by default. Use
-`--max-results <count>` to set a total safety limit. Gmail batch modifications
-are automatically split into requests of at most 1000 message IDs.
+Query-based write commands require either `--max-results <count>` or an explicit
+`--all`. Use `--dry-run` first to inspect the resolved message IDs. Gmail batch
+modifications are automatically split into requests of at most 1000 message
+IDs. Downloads refuse to replace existing files unless `--force` is present.
 
 The implemented endpoints and response types are tracked in
 [`docs/gmail-api-audit.md`](docs/gmail-api-audit.md).
+Agent-oriented workflows and the output contract are documented in
+[`docs/agent-usage.md`](docs/agent-usage.md).
 
 ## npm release
 
 ```sh
-bun run check
-bun run build
+npm pack --dry-run
 npm publish --access public
 ```
+
+The package `prepack` hook runs the full checks and rebuilds `dist/gml.js`.

@@ -1,7 +1,7 @@
 {
   "name": "@longyijdos/gmail",
   "version": "0.1.0",
-  "description": "A stateless JSON-first Gmail CLI for agents and scripts.",
+  "description": "A Gmail CLI with concise text and optional JSON output for agents and scripts.",
   "type": "module",
   "bin": {
     "gml": "./dist/gml.js"
@@ -15,6 +15,7 @@
   "scripts": {
     "build": "bun build src/main.ts --target=bun --outfile=dist/gml.js && chmod +x dist/gml.js",
     "check": "bun run typecheck && bun test",
+    "prepack": "bun run check && bun run build",
     "typecheck": "tsc --noEmit",
     "dev": "bun src/main.ts"
   },
@@ -23,7 +24,8 @@
     "cli",
     "oauth",
     "json",
-    "agent"
+    "agent",
+    "automation"
   ],
   "license": "MIT",
   "devDependencies": {
