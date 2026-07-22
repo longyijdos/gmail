@@ -22,11 +22,11 @@ describe("args", () => {
     const program = buildProgram(async (current) => {
       invocation = current;
     });
-    await program.parseAsync(["messages", "list", "--label-id", "INBOX", "--label-id=SENT"], { from: "user" });
+    await program.parseAsync(["messages", "list", "--label-id", "INBOX", "--label-id=SENT", "--summary"], { from: "user" });
     expect(invocation).toMatchObject({
       id: "messages.list",
       args: [],
-      options: { labelId: ["INBOX", "SENT"] },
+      options: { labelId: ["INBOX", "SENT"], summary: true },
     });
   });
 
@@ -109,6 +109,29 @@ describe("text output", () => {
     ].join("\n"));
   });
 
+  test("formats message summaries for agent scanning", () => {
+    expect(formatCommandOutput({
+      ok: true,
+      data: {
+        messages: [{ id: "message-1", threadId: "thread-1" }],
+        summaries: [{
+          id: "message-1",
+          threadId: "thread-1",
+          date: "Tue, 21 Jul 2026 09:00:00 +0000",
+          from: "Jane Doe <jane@example.com>",
+          subject: "Quarterly\n update",
+          snippet: "The latest numbers are ready.\nPlease review.",
+          labelIds: ["INBOX", "IMPORTANT"],
+        }],
+      },
+    }, "messages.list")).toBe([
+      "1 message(s).",
+      "ID\tTHREAD\tDATE\tFROM\tSUBJECT\tLABELS",
+      "message-1\tthread-1\tTue, 21 Jul 2026 09:00:00 +0000\tJane Doe <jane@example.com>\tQuarterly update\tINBOX,IMPORTANT",
+      "  The latest numbers are ready. Please review.",
+    ].join("\n"));
+  });
+
   test("formats auth status as text", () => {
     expect(formatCommandOutput({
       ok: true,
@@ -134,6 +157,73 @@ describe("text output", () => {
 });
 
 describe("command execution", () => {
+  test("enriches message lists with metadata summaries", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "gml-test-"));
+    const previousHome = process.env.GML_HOME;
+    const previousFetch = globalThis.fetch;
+    const requestedUrls: string[] = [];
+    try {
+      process.env.GML_HOME = directory;
+      await saveCredentials({
+        client: { clientId: "test-client" },
+        token: {
+          accessToken: "test-token",
+          tokenType: "Bearer",
+          expiresAt: Date.now() + 3_600_000,
+          scopes: [GMAIL_SCOPES.readonly],
+        },
+      });
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        const url = input.toString();
+        requestedUrls.push(url);
+        if (url.includes("/messages?")) {
+          return Response.json({
+            messages: [
+              { id: "message-1", threadId: "thread-1" },
+              { id: "message-2", threadId: "thread-2" },
+            ],
+            resultSizeEstimate: 2,
+          });
+        }
+        const id = url.includes("message-1") ? "message-1" : "message-2";
+        return Response.json({
+          id,
+          threadId: id.replace("message", "thread"),
+          labelIds: ["INBOX"],
+          snippet: `Snippet for ${id}`,
+          payload: {
+            headers: [
+              { name: "From", value: `${id}@example.com` },
+              { name: "Subject", value: `Subject for ${id}` },
+            ],
+          },
+        });
+      }) as unknown as typeof fetch;
+
+      const outcome = await executeCommand(["messages", "list", "--summary", "--max-results", "2"]);
+      expect(outcome).toMatchObject({
+        ok: true,
+        invocation: { id: "messages.list", options: { summary: true, maxResults: 2 } },
+        value: {
+          data: {
+            summaries: [
+              { id: "message-1", from: "message-1@example.com", subject: "Subject for message-1" },
+              { id: "message-2", from: "message-2@example.com", subject: "Subject for message-2" },
+            ],
+          },
+        },
+      });
+      expect(requestedUrls).toHaveLength(3);
+      expect(requestedUrls[0]).toContain("/messages?maxResults=2");
+      expect(requestedUrls.slice(1).every((url) => url.includes("format=metadata"))).toBe(true);
+    } finally {
+      globalThis.fetch = previousFetch;
+      if (previousHome === undefined) delete process.env.GML_HOME;
+      else process.env.GML_HOME = previousHome;
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   test("requires an explicit limit or --all for query-based writes", async () => {
     const outcome = await executeCommand(["archive", "--query", "is:inbox"]);
     expect(outcome).toMatchObject({

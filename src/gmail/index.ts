@@ -7,6 +7,7 @@ export {
   messageAction,
   modifyMessages,
   sendMessage,
+  summarizeMessages,
 } from "./messages";
 export {
   base64urlDecode,
@@ -36,5 +37,7 @@ export {
   type ListDraftsResponse,
   type ListLabelsResponse,
   type ListMessagesResponse,
+  type ListMessagesWithSummariesResponse,
   type ListThreadsResponse,
+  type MessageSummary,
 } from "./types";

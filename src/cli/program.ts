@@ -188,6 +188,7 @@ function addListOptions(command: Command): Command {
     .option("--page-token <token>", "pagination token")
     .option("--label <label>", "label name or id; repeat for multiple labels", collect)
     .option("--label-id <id>", "label id; repeat for multiple labels", collect)
+    .option("--summary", "fetch sender, subject, date, labels, and snippet")
     .addOption(includeSpamTrashOption());
 }
 

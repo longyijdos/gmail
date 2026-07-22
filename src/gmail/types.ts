@@ -55,6 +55,22 @@ export type ListMessagesResponse = {
   resultSizeEstimate?: number;
 };
 
+export type MessageSummary = {
+  id: string;
+  threadId?: string;
+  from?: string;
+  to?: string;
+  date?: string;
+  subject?: string;
+  snippet?: string;
+  labelIds?: string[];
+  error?: { code: string; message: string };
+};
+
+export type ListMessagesWithSummariesResponse = ListMessagesResponse & {
+  summaries: MessageSummary[];
+};
+
 export type GmailThread = {
   id?: string;
   historyId?: string;

@@ -75,6 +75,7 @@ export type CommandOptions = {
   remove?: string[];
   scope?: string[];
   subject?: string;
+  summary?: boolean;
   text?: string;
   to?: string | string[];
 };

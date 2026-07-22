@@ -123,13 +123,33 @@ function formatMessageList(value: unknown): string {
   const response = asRecord(value) ?? {};
   const messages = arrayValue(response.messages);
   const lines = [`${messages.length} message(s).`];
-  lines.push(...messages.map((item) => {
-    const message = asRecord(item) ?? {};
-    return [message.id, message.threadId].map(stringValue).filter(Boolean).join("\t");
-  }));
+  const summaries = arrayValue(response.summaries);
+  if (summaries.length > 0) {
+    lines.push("ID\tTHREAD\tDATE\tFROM\tSUBJECT\tLABELS");
+    lines.push(...summaries.flatMap((item) => formatMessageSummary(item)));
+  } else {
+    lines.push(...messages.map((item) => {
+      const message = asRecord(item) ?? {};
+      return [message.id, message.threadId].map(stringValue).filter(Boolean).join("\t");
+    }));
+  }
   if (response.nextPageToken !== undefined) lines.push(`Next page: ${stringValue(response.nextPageToken)}`);
   if (response.resultSizeEstimate !== undefined) lines.push(`Estimated total: ${stringValue(response.resultSizeEstimate)}`);
   return lines.join("\n");
+}
+
+function formatMessageSummary(value: unknown): string[] {
+  const summary = asRecord(value) ?? {};
+  const error = asRecord(summary.error);
+  if (error !== undefined) {
+    return [`${singleLine(summary.id)}\t\t\t\t[${singleLine(error.code)}] ${singleLine(error.message)}\t`];
+  }
+  return [
+    [summary.id, summary.threadId, summary.date, summary.from, summary.subject, arrayValue(summary.labelIds).join(",")]
+      .map(singleLine)
+      .join("\t"),
+    ...(summary.snippet === undefined ? [] : [`  ${singleLine(summary.snippet)}`]),
+  ];
 }
 
 function formatRead(root: JsonRecord): string {
@@ -263,6 +283,10 @@ function stringValue(value: unknown): string {
   if (value === undefined || value === null) return "";
   if (Array.isArray(value)) return value.map(stringValue).join(", ");
   return String(value);
+}
+
+function singleLine(value: unknown): string {
+  return stringValue(value).replace(/\s+/g, " ").trim();
 }
 
 function inlineValue(value: unknown): string {

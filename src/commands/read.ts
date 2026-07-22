@@ -12,6 +12,7 @@ import {
   listMessages,
   listThreads,
   profile,
+  summarizeMessages,
 } from "@/gmail";
 import { CliError } from "@/utils";
 import { argumentAt, resolveLabelOptions, variadicArguments } from "./helpers";
@@ -22,16 +23,17 @@ export async function handleReadCommand(context: CommandContext): Promise<unknow
   if (id === "profile") return { ok: true, data: await profile(oauthClient) };
   if (id === "messages.list") {
     const q = variadicArguments(args).join(" ") || options.q;
+    const response = await listMessages({
+      q,
+      maxResults: options.maxResults,
+      pageToken: options.pageToken,
+      labelIds: await resolveLabelOptions(options, oauthClient),
+      includeSpamTrash: options.includeSpamTrash,
+      oauthClient,
+    });
     return {
       ok: true,
-      data: await listMessages({
-        q,
-        maxResults: options.maxResults,
-        pageToken: options.pageToken,
-        labelIds: await resolveLabelOptions(options, oauthClient),
-        includeSpamTrash: options.includeSpamTrash,
-        oauthClient,
-      }),
+      data: options.summary === true ? await summarizeMessages(response, oauthClient) : response,
     };
   }
   if (id === "messages.get") {

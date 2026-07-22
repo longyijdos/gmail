@@ -1,12 +1,15 @@
 import { GMAIL_SCOPES, type OAuthClient } from "@/auth";
 import { CliError } from "@/utils";
-import { buildRaw, type AttachmentInput } from "./mime";
+import pLimit from "p-limit";
+import { buildRaw, header, type AttachmentInput } from "./mime";
 import { gmailRequest } from "./transport";
 import type {
   BatchModifyResult,
   GmailMessage,
   GmailMessagePartBody,
   ListMessagesResponse,
+  ListMessagesWithSummariesResponse,
+  MessageSummary,
 } from "./types";
 
 export function listMessages(options: {
@@ -49,6 +52,39 @@ export function getMessage(options: {
       : [GMAIL_SCOPES.readonly],
     oauthClient: options.oauthClient,
   });
+}
+
+export async function summarizeMessages(
+  response: ListMessagesResponse,
+  oauthClient?: OAuthClient,
+  concurrency = 6,
+): Promise<ListMessagesWithSummariesResponse> {
+  const limit = pLimit(concurrency);
+  const summaries = await limit.map(response.messages ?? [], async (reference): Promise<MessageSummary> => {
+    const id = reference.id;
+    if (!id) return { id: "", error: { code: "message_id_missing", message: "List item did not include an id." } };
+    try {
+      const message = await getMessage({
+        id,
+        format: "metadata",
+        metadataHeaders: ["From", "To", "Date", "Subject"],
+        oauthClient,
+      });
+      return {
+        id,
+        threadId: message.threadId ?? reference.threadId,
+        from: header(message.payload, "From") || undefined,
+        to: header(message.payload, "To") || undefined,
+        date: header(message.payload, "Date") || undefined,
+        subject: header(message.payload, "Subject") || undefined,
+        snippet: message.snippet,
+        labelIds: message.labelIds,
+      };
+    } catch (error) {
+      return { id, threadId: reference.threadId, error: summaryError(error) };
+    }
+  });
+  return { ...response, summaries };
 }
 
 export function sendMessage(options: {
@@ -151,4 +187,10 @@ function errorDetails(error: unknown): unknown {
     return { code: error.code, message: error.message, details: error.details };
   }
   return { code: "internal_error", message: error instanceof Error ? error.message : String(error) };
+}
+
+function summaryError(error: unknown): { code: string; message: string } {
+  return error instanceof CliError
+    ? { code: error.code, message: error.message }
+    : { code: "internal_error", message: error instanceof Error ? error.message : String(error) };
 }
