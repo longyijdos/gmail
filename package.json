@@ -20,6 +20,7 @@
     "format:check": "biome format .",
     "lint": "biome lint .",
     "lint:fix": "biome lint --write .",
+    "prepare": "husky",
     "prepack": "bun run check && bun run build",
     "typecheck": "tsc --noEmit",
     "dev": "bun src/main.ts"
@@ -49,6 +50,7 @@
     "@biomejs/biome": "2.5.4",
     "@types/bun": "^1.3.14",
     "@types/node": "^25.9.1",
+    "husky": "9.1.7",
     "typescript": "^6.0.3"
   },
   "engines": {

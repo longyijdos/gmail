@@ -20,6 +20,8 @@ bun run build
 ./dist/gml.js help
 ```
 
+`bun install` also installs a Husky pre-commit hook that runs `bun run check`.
+
 Code quality commands:
 
 ```sh
