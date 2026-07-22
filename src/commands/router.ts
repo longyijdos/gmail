@@ -1,5 +1,3 @@
-import { parseArgs } from "@/cli";
-import { CliError } from "@/utils";
 import { handleAuthCommand } from "./auth";
 import { handleLabelCommand } from "./labels";
 import { handleOrganizeCommand } from "./organize";
@@ -7,45 +5,51 @@ import { handleReadCommand } from "./read";
 import { handleRequestCommand } from "./request";
 import { handleWriteCommand } from "./write";
 import { resolveOAuthClient } from "./helpers";
-import type { CommandContext } from "./types";
+import type { CommandContext, CommandId, CommandInvocation } from "./types";
 
-const ORGANIZE_COMMANDS = new Set([
-  "modify",
-  "markread",
-  "markunread",
-  "star",
-  "unstar",
-  "archive",
-  "unarchive",
-  "spam",
-  "unspam",
-  "trash",
-  "untrash",
+const AUTH_COMMANDS = new Set<CommandId>(["auth.login", "auth.status", "auth.logout"]);
+const LABEL_COMMANDS = new Set<CommandId>(["labels.list", "labels.create", "labels.delete", "labels.rename"]);
+const READ_COMMANDS = new Set<CommandId>([
+  "profile",
+  "messages.list",
+  "messages.get",
+  "messages.read",
+  "messages.attachments",
+  "messages.download",
+  "threads.list",
+  "threads.get",
+]);
+const WRITE_COMMANDS = new Set<CommandId>([
+  "messages.send",
+  "messages.reply",
+  "messages.forward",
+  "drafts.create",
+  "drafts.list",
+  "drafts.send",
+  "drafts.delete",
+]);
+const ORGANIZE_COMMANDS = new Set<CommandId>([
+  "messages.modify",
+  "messages.trash",
+  "messages.untrash",
+  "messages.mark-read",
+  "messages.mark-unread",
+  "messages.star",
+  "messages.unstar",
+  "messages.archive",
+  "messages.unarchive",
+  "messages.spam",
+  "messages.unspam",
 ]);
 
-export async function runCommand(argv: string[]): Promise<unknown> {
-  const parsed = parseArgs(argv);
-  const [command, subcommand, ...rest] = parsed.positionals;
-  if (command === undefined) throw new CliError("Missing command.", "command_missing");
+export async function runCommand(invocation: CommandInvocation): Promise<unknown> {
+  if (AUTH_COMMANDS.has(invocation.id)) return handleAuthCommand(invocation);
 
-  if (command === "auth") {
-    const response = await handleAuthCommand({ parsed, command, subcommand, rest });
-    if (response !== undefined) return response;
-  }
-
-  const oauthClient = await resolveOAuthClient(parsed.flags, { required: false });
-  const context: CommandContext = { parsed, command, subcommand, rest, oauthClient };
-
-  const response =
-    (await handleReadCommand(context)) ??
-    (await handleLabelCommand(context)) ??
-    (await handleWriteCommand(context)) ??
-    (await handleOrganizeCommand(context)) ??
-    (await handleRequestCommand(context));
-
-  if (response !== undefined) return response;
-  if (ORGANIZE_COMMANDS.has(command)) {
-    throw new CliError(`Unknown organize command: ${command}`, "command_unknown");
-  }
-  throw new CliError(`Unknown command: ${[command, subcommand].filter(Boolean).join(" ")}`, "command_unknown");
+  const oauthClient = await resolveOAuthClient(invocation.options, false);
+  const context: CommandContext = { ...invocation, oauthClient };
+  if (LABEL_COMMANDS.has(invocation.id)) return handleLabelCommand(context);
+  if (READ_COMMANDS.has(invocation.id)) return handleReadCommand(context);
+  if (WRITE_COMMANDS.has(invocation.id)) return handleWriteCommand(context);
+  if (ORGANIZE_COMMANDS.has(invocation.id)) return handleOrganizeCommand(context);
+  return handleRequestCommand(context);
 }

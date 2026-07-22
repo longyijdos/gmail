@@ -1,15 +1,24 @@
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { type OAuthClient, readGoogleClientSecretFile } from "@/auth";
-import { many, one } from "@/cli";
 import { guessMimeType, listLabels, listMessages, type AttachmentInput } from "@/gmail";
 import { CliError } from "@/utils";
+import type { CommandArgument, CommandId, CommandOptions } from "./types";
 
-export async function resolveBody(
-  flags: Record<string, string[]>,
-): Promise<{ text?: string; html?: string }> {
-  const bodyValue = one(flags, "body") ?? one(flags, "text");
-  const bodyFile = one(flags, "body-file");
+export function argumentAt(args: CommandArgument[], index: number): string | undefined {
+  const value = args[index];
+  return typeof value === "string" ? value : undefined;
+}
+
+export function variadicArguments(args: CommandArgument[], index = 0): string[] {
+  const value = args[index];
+  if (Array.isArray(value)) return value;
+  return typeof value === "string" ? [value] : [];
+}
+
+export async function resolveBody(options: CommandOptions): Promise<{ text?: string; html?: string }> {
+  const bodyValue = options.body ?? options.text;
+  const bodyFile = options.bodyFile;
   if (bodyValue !== undefined && bodyFile !== undefined) {
     throw new CliError("Use either --body/--text or --body-file, not both.", "args_invalid");
   }
@@ -17,35 +26,29 @@ export async function resolveBody(
     bodyFile !== undefined
       ? bodyFile === "-"
         ? await Bun.stdin.text()
-        : await readFile(bodyFile, "utf8")
+        : await readTextFile(bodyFile, "message body")
       : bodyValue === "-"
         ? await Bun.stdin.text()
         : bodyValue;
   if (content === undefined) {
     throw new CliError("Missing --body, --text, or --body-file.", "body_missing");
   }
-  return one(flags, "html") === undefined
-    ? { text: content }
-    : { html: content, ...(one(flags, "text") === undefined ? {} : { text: one(flags, "text") }) };
+  return options.html === true
+    ? { html: content, ...(options.text === undefined ? {} : { text: options.text }) }
+    : { text: content };
 }
 
-export async function resolveOptionalBody(
-  flags: Record<string, string[]>,
-): Promise<{ text?: string; html?: string }> {
-  const bodyValue = one(flags, "body") ?? one(flags, "text");
-  const bodyFile = one(flags, "body-file");
-  if (bodyValue === undefined && bodyFile === undefined) return {};
-  return resolveBody(flags);
+export async function resolveOptionalBody(options: CommandOptions): Promise<{ text?: string; html?: string }> {
+  if (options.body === undefined && options.text === undefined && options.bodyFile === undefined) return {};
+  return resolveBody(options);
 }
 
-export async function resolveAttachments(
-  flags: Record<string, string[]>,
-): Promise<AttachmentInput[]> {
+export async function resolveAttachments(options: CommandOptions): Promise<AttachmentInput[]> {
   return Promise.all(
-    many(flags, "attach").map(async (filePath) => ({
+    (options.attach ?? []).map(async (filePath) => ({
       filename: basename(filePath),
       mimeType: guessMimeType(filePath),
-      content: await readFile(filePath),
+      content: await readBinaryFile(filePath, "attachment"),
     })),
   );
 }
@@ -58,11 +61,11 @@ export function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-export async function resolveLabelFlags(
-  flags: Record<string, string[]>,
+export async function resolveLabelOptions(
+  options: CommandOptions,
   oauthClient?: OAuthClient,
 ): Promise<string[] | undefined> {
-  const labels = [...many(flags, "label-id"), ...many(flags, "label")];
+  const labels = [...(options.labelId ?? []), ...(options.label ?? [])];
   if (labels.length === 0) return undefined;
   return Promise.all(labels.map((label) => resolveLabelId(label, oauthClient)));
 }
@@ -98,21 +101,29 @@ export async function resolveLabelId(label: string, oauthClient?: OAuthClient): 
 
 export async function resolveTargets(
   ids: string[],
-  flags: Record<string, string[]>,
+  options: CommandOptions,
   oauthClient?: OAuthClient,
 ): Promise<string[]> {
   const result = [...ids];
-  const query = one(flags, "query");
-  if (query !== undefined) {
-    const maxResults = parsePositiveInteger(one(flags, "max-results"), "--max-results");
+  if (options.query !== undefined) {
+    if (options.maxResults === undefined && options.all !== true) {
+      throw new CliError(
+        "Query-based write operations require --max-results <count> or an explicit --all.",
+        "bulk_limit_required",
+        { query: options.query },
+      );
+    }
+    if (options.maxResults !== undefined && options.all === true) {
+      throw new CliError("Use either --max-results or --all, not both.", "args_invalid");
+    }
     result.push(...await collectMessageIds(
       (pageToken, pageSize) => listMessages({
-        q: query,
+        q: options.query,
         pageToken,
         maxResults: String(pageSize),
         oauthClient,
       }) as Promise<MessageIdPage>,
-      maxResults,
+      options.maxResults,
     ));
   }
   const unique = [...new Set(result)];
@@ -160,65 +171,72 @@ export async function collectMessageIds(
   return ids;
 }
 
-function parsePositiveInteger(value: string | undefined, name: string): number | undefined {
-  if (value === undefined) return undefined;
-  if (!/^\d+$/.test(value) || Number(value) < 1 || !Number.isSafeInteger(Number(value))) {
-    throw new CliError(`${name} must be a positive integer.`, "args_invalid");
-  }
-  return Number(value);
-}
-
 export async function labelsForOrganize(
-  command: string,
-  flags: Record<string, string[]>,
+  command: CommandId,
+  options: CommandOptions,
   oauthClient?: OAuthClient,
 ): Promise<{ addLabelIds: string[]; removeLabelIds: string[] }> {
-  const add = many(flags, "add");
-  const remove = many(flags, "remove");
-  const presets: Record<string, { add?: string[]; remove?: string[] }> = {
-    markread: { remove: ["UNREAD"] },
-    markunread: { add: ["UNREAD"] },
-    star: { add: ["STARRED"] },
-    unstar: { remove: ["STARRED"] },
-    archive: { remove: ["INBOX"] },
-    unarchive: { add: ["INBOX"] },
-    spam: { add: ["SPAM"], remove: ["INBOX"] },
-    unspam: { add: ["INBOX"], remove: ["SPAM"] },
+  const presets: Partial<Record<CommandId, { add?: string[]; remove?: string[] }>> = {
+    "messages.mark-read": { remove: ["UNREAD"] },
+    "messages.mark-unread": { add: ["UNREAD"] },
+    "messages.star": { add: ["STARRED"] },
+    "messages.unstar": { remove: ["STARRED"] },
+    "messages.archive": { remove: ["INBOX"] },
+    "messages.unarchive": { add: ["INBOX"] },
+    "messages.spam": { add: ["SPAM"], remove: ["INBOX"] },
+    "messages.unspam": { add: ["INBOX"], remove: ["SPAM"] },
   };
   const preset = presets[command] ?? {};
   const addLabelIds = [...new Set(await Promise.all(
-    [...(preset.add ?? []), ...add].map((label) => resolveLabelId(label, oauthClient)),
+    [...(preset.add ?? []), ...(options.add ?? [])].map((label) => resolveLabelId(label, oauthClient)),
   ))];
   const removeLabelIds = [...new Set(await Promise.all(
-    [...(preset.remove ?? []), ...remove].map((label) => resolveLabelId(label, oauthClient)),
+    [...(preset.remove ?? []), ...(options.remove ?? [])].map((label) => resolveLabelId(label, oauthClient)),
   ))];
+  if (command === "messages.modify" && addLabelIds.length === 0 && removeLabelIds.length === 0) {
+    throw new CliError("Modify requires at least one --add or --remove label.", "label_change_missing");
+  }
   if (addLabelIds.length > 100 || removeLabelIds.length > 100) {
     throw new CliError("Gmail allows at most 100 labels to be added or removed per modify request.", "label_limit_exceeded", {
       add: addLabelIds.length,
       remove: removeLabelIds.length,
     });
   }
-  return {
-    addLabelIds,
-    removeLabelIds,
-  };
+  return { addLabelIds, removeLabelIds };
+}
+
+export async function readJsonInput(options: CommandOptions): Promise<unknown> {
+  if (options.body !== undefined && options.bodyFile !== undefined) {
+    throw new CliError("Use either --body or --body-file, not both.", "args_invalid");
+  }
+  const value = options.bodyFile === undefined
+    ? options.body
+    : await readTextFile(options.bodyFile, "JSON request body");
+  if (value === undefined) return undefined;
+  try {
+    return JSON.parse(value);
+  } catch {
+    throw new CliError("Request body is not valid JSON.", "json_invalid", {
+      source: options.bodyFile === undefined ? "--body" : options.bodyFile,
+    });
+  }
 }
 
 export async function resolveOAuthClient(
-  flags: Record<string, string[]>,
-  options: { required: true },
+  options: CommandOptions,
+  required: true,
 ): Promise<OAuthClient>;
 export async function resolveOAuthClient(
-  flags: Record<string, string[]>,
-  options: { required: false },
+  options: CommandOptions,
+  required: false,
 ): Promise<OAuthClient | undefined>;
 export async function resolveOAuthClient(
-  flags: Record<string, string[]>,
-  options: { required: boolean },
+  options: CommandOptions,
+  required: boolean,
 ): Promise<OAuthClient | undefined> {
-  const file = one(flags, "client-secret-file") ?? process.env.GML_CLIENT_SECRET_FILE;
-  const explicitClientId = one(flags, "client-id") ?? process.env.GML_CLIENT_ID;
-  const explicitClientSecret = one(flags, "client-secret") ?? process.env.GML_CLIENT_SECRET;
+  const file = options.clientSecretFile ?? process.env.GML_CLIENT_SECRET_FILE;
+  const explicitClientId = options.clientId ?? process.env.GML_CLIENT_ID;
+  const explicitClientSecret = options.clientSecret ?? process.env.GML_CLIENT_SECRET;
 
   if (file !== undefined) {
     const fileClient = await readGoogleClientSecretFile(file);
@@ -242,11 +260,37 @@ export async function resolveOAuthClient(
     throw new CliError("GML_CLIENT_SECRET/--client-secret requires GML_CLIENT_ID/--client-id.", "client_id_missing");
   }
 
-  if (options.required) {
+  if (required) {
     throw new CliError(
       "Missing OAuth client credentials. Pass --client-secret-file, or set GML_CLIENT_ID and optionally GML_CLIENT_SECRET.",
       "client_credentials_missing",
     );
   }
   return undefined;
+}
+
+async function readTextFile(filePath: string, purpose: string): Promise<string> {
+  try {
+    return await readFile(filePath, "utf8");
+  } catch (error) {
+    throw new CliError(`Failed to read ${purpose} file.`, "file_read_failed", {
+      path: filePath,
+      cause: errorMessage(error),
+    });
+  }
+}
+
+async function readBinaryFile(filePath: string, purpose: string): Promise<Buffer> {
+  try {
+    return await readFile(filePath);
+  } catch (error) {
+    throw new CliError(`Failed to read ${purpose} file.`, "file_read_failed", {
+      path: filePath,
+      cause: errorMessage(error),
+    });
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

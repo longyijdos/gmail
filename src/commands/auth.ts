@@ -1,14 +1,13 @@
 import { authStatus, deleteCredentials, login, normalizeScopes } from "@/auth";
-import { many, one } from "@/cli";
 import { resolveOAuthClient } from "./helpers";
-import type { CommandContext } from "./types";
+import type { CommandInvocation } from "./types";
 
-export async function handleAuthCommand(context: Omit<CommandContext, "oauthClient">): Promise<unknown | undefined> {
-  const { parsed, subcommand } = context;
-  if (subcommand === "login") {
-    const client = await resolveOAuthClient(parsed.flags, { required: true });
-    const scopes = normalizeScopes(many(parsed.flags, "scope"), ["readonly"]);
-    const noOpen = one(parsed.flags, "no-open") !== undefined;
+export async function handleAuthCommand(invocation: CommandInvocation): Promise<unknown> {
+  const { id, options } = invocation;
+  if (id === "auth.login") {
+    const client = await resolveOAuthClient(options, true);
+    const scopes = normalizeScopes(options.scope ?? [], ["readonly"]);
+    const noOpen = options.open === false;
     const token = await login(client, scopes.normalized, {
       openBrowser: !noOpen,
       onAuthorizationUrl(url) {
@@ -46,10 +45,7 @@ export async function handleAuthCommand(context: Omit<CommandContext, "oauthClie
       expiresAt: token.expiresAt === undefined ? undefined : new Date(token.expiresAt).toISOString(),
     };
   }
-  if (subcommand === "status") return { ok: true, ...(await authStatus()) };
-  if (subcommand === "logout") {
-    await deleteCredentials();
-    return { ok: true, authorized: false };
-  }
-  return undefined;
+  if (id === "auth.status") return { ok: true, ...(await authStatus()) };
+  await deleteCredentials();
+  return { ok: true, authorized: false };
 }

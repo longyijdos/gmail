@@ -1,6 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { bool, many, one } from "@/cli";
 import {
   base64urlDecode,
   extractBody,
@@ -8,144 +7,176 @@ import {
   getMessage,
   getThread,
   header,
+  htmlToText,
   listAttachments,
   listMessages,
   listThreads,
   profile,
 } from "@/gmail";
 import { CliError } from "@/utils";
-import { resolveLabelFlags } from "./helpers";
+import { argumentAt, resolveLabelOptions, variadicArguments } from "./helpers";
 import type { CommandContext } from "./types";
 
-export async function handleReadCommand(context: CommandContext): Promise<unknown | undefined> {
-  const { parsed, command, subcommand, rest, oauthClient } = context;
-  if (command === "profile") return { ok: true, data: await profile(oauthClient) };
-  if ((command === "messages" && subcommand === "list") || command === "list" || command === "search") {
-    const query = command === "search"
-      ? rest.join(" ") || one(parsed.flags, "q")
-      : command === "list"
-        ? [subcommand, ...rest].filter(Boolean).join(" ") || one(parsed.flags, "q")
-        : one(parsed.flags, "q");
+export async function handleReadCommand(context: CommandContext): Promise<unknown> {
+  const { id, args, options, oauthClient } = context;
+  if (id === "profile") return { ok: true, data: await profile(oauthClient) };
+  if (id === "messages.list") {
+    const q = variadicArguments(args).join(" ") || options.q;
     return {
       ok: true,
       data: await listMessages({
-        q: query,
-        maxResults: one(parsed.flags, "max-results"),
-        pageToken: one(parsed.flags, "page-token"),
-        labelIds: await resolveLabelFlags(parsed.flags, oauthClient),
-        includeSpamTrash: bool(parsed.flags, "include-spam-trash"),
+        q,
+        maxResults: stringNumber(options.maxResults),
+        pageToken: options.pageToken,
+        labelIds: await resolveLabelOptions(options, oauthClient),
+        includeSpamTrash: stringBoolean(options.includeSpamTrash),
         oauthClient,
       }),
     };
   }
-  if ((command === "messages" && subcommand === "get") || command === "read") {
-    return readMessage(context);
+  if (id === "messages.get") {
+    const messageId = argumentAt(args, 0) ?? options.id;
+    if (!messageId) throw new CliError("Missing message id.", "message_id_missing");
+    return {
+      ok: true,
+      data: await getMessage({
+        id: messageId,
+        format: options.format,
+        metadataHeaders: options.metadataHeader,
+        oauthClient,
+      }),
+    };
   }
-  if (command === "threads") {
-    const q = [subcommand, ...rest].filter(Boolean).join(" ") || one(parsed.flags, "q");
+  if (id === "messages.read") return readMessage(context);
+  if (id === "threads.list") {
+    const q = variadicArguments(args).join(" ") || options.q;
     return {
       ok: true,
       data: await listThreads({
         q,
-        maxResults: one(parsed.flags, "max-results"),
-        pageToken: one(parsed.flags, "page-token"),
-        labelIds: await resolveLabelFlags(parsed.flags, oauthClient),
-        includeSpamTrash: bool(parsed.flags, "include-spam-trash"),
+        maxResults: stringNumber(options.maxResults),
+        pageToken: options.pageToken,
+        labelIds: await resolveLabelOptions(options, oauthClient),
+        includeSpamTrash: stringBoolean(options.includeSpamTrash),
         oauthClient,
       }),
     };
   }
-  if (command === "thread") {
-    const id = subcommand ?? one(parsed.flags, "id");
-    if (!id) throw new CliError("Missing thread id.", "thread_id_missing");
+  if (id === "threads.get") {
+    const threadId = argumentAt(args, 0) ?? options.id;
+    if (!threadId) throw new CliError("Missing thread id.", "thread_id_missing");
     return {
       ok: true,
       data: await getThread({
-        id,
-        format: one(parsed.flags, "format") ?? "full",
-        metadataHeaders: many(parsed.flags, "metadata-header"),
+        id: threadId,
+        format: options.format ?? "full",
+        metadataHeaders: options.metadataHeader,
         oauthClient,
       }),
     };
   }
-  if (command === "attachments") {
-    const id = subcommand ?? one(parsed.flags, "id");
-    if (!id) throw new CliError("Missing message id.", "message_id_missing");
-    const message = await getMessage({ id, format: "full", oauthClient }) as Record<string, unknown>;
+  if (id === "messages.attachments") {
+    const messageId = argumentAt(args, 0) ?? options.id;
+    if (!messageId) throw new CliError("Missing message id.", "message_id_missing");
+    const message = await getMessage({ id: messageId, format: "full", oauthClient }) as Record<string, unknown>;
     return { ok: true, data: listAttachments(message.payload) };
   }
-  if (command === "download") return downloadAttachments(context);
-  return undefined;
+  return downloadAttachments(context);
 }
 
 async function readMessage(context: CommandContext): Promise<unknown> {
-  const { parsed, command, subcommand, rest, oauthClient } = context;
-  const id = (command === "read" ? subcommand : rest[0]) ?? one(parsed.flags, "id");
-  if (!id) throw new CliError("Missing message id.", "message_id_missing");
-  if (command === "read") {
-    const raw = one(parsed.flags, "raw");
-    const message = await getMessage({
-      id,
-      format: raw === undefined ? "full" : "raw",
-      oauthClient,
-    }) as Record<string, unknown>;
-    if (raw !== undefined) {
-      if (typeof message.raw !== "string") {
-        throw new CliError("Raw message response did not include raw data.", "raw_message_missing");
-      }
-      return { ok: true, raw: base64urlDecode(message.raw).toString("utf8") };
+  const { args, options, oauthClient } = context;
+  const messageId = argumentAt(args, 0) ?? options.id;
+  if (!messageId) throw new CliError("Missing message id.", "message_id_missing");
+  const message = await getMessage({
+    id: messageId,
+    format: options.raw === true ? "raw" : "full",
+    oauthClient,
+  }) as Record<string, unknown>;
+  if (options.raw === true) {
+    if (typeof message.raw !== "string") {
+      throw new CliError("Raw message response did not include raw data.", "raw_message_missing");
     }
-    const payload = message.payload;
-    const body = extractBody(payload);
-    return {
-      ok: true,
-      data: {
-        id: message.id,
-        threadId: message.threadId,
-        labelIds: message.labelIds,
-        snippet: message.snippet,
-        headers: {
-          date: header(payload, "Date"),
-          from: header(payload, "From"),
-          to: header(payload, "To"),
-          cc: header(payload, "Cc"),
-          subject: header(payload, "Subject"),
-          messageId: header(payload, "Message-ID"),
-          references: header(payload, "References"),
-        },
-        body,
-        attachments: listAttachments(payload),
-      },
-    };
+    return { ok: true, raw: base64urlDecode(message.raw).toString("utf8") };
   }
+  const payload = message.payload;
+  const body = extractBody(payload);
+  if (!body.text && body.html) body.text = htmlToText(body.html);
   return {
     ok: true,
-    data: await getMessage({
-      id,
-      format: one(parsed.flags, "format"),
-      metadataHeaders: many(parsed.flags, "metadata-header"),
-      oauthClient,
-    }),
+    data: {
+      id: message.id,
+      threadId: message.threadId,
+      labelIds: message.labelIds,
+      snippet: message.snippet,
+      headers: {
+        date: header(payload, "Date"),
+        from: header(payload, "From"),
+        to: header(payload, "To"),
+        cc: header(payload, "Cc"),
+        subject: header(payload, "Subject"),
+        messageId: header(payload, "Message-ID"),
+        references: header(payload, "References"),
+      },
+      body,
+      attachments: listAttachments(payload),
+    },
   };
 }
 
 async function downloadAttachments(context: CommandContext): Promise<unknown> {
-  const { parsed, subcommand, oauthClient } = context;
-  const id = subcommand ?? one(parsed.flags, "id");
-  if (!id) throw new CliError("Missing message id.", "message_id_missing");
-  const outDir = one(parsed.flags, "out") ?? ".";
-  const only = one(parsed.flags, "attachment");
-  const message = await getMessage({ id, format: "full", oauthClient }) as Record<string, unknown>;
-  const attachments = listAttachments(message.payload).filter((attachment) => only === undefined || attachment.attachmentId === only);
+  const { args, options, oauthClient } = context;
+  const messageId = argumentAt(args, 0) ?? options.id;
+  if (!messageId) throw new CliError("Missing message id.", "message_id_missing");
+  const outDir = options.out ?? ".";
+  const message = await getMessage({ id: messageId, format: "full", oauthClient }) as Record<string, unknown>;
+  const attachments = listAttachments(message.payload).filter(
+    (attachment) => options.attachment === undefined || attachment.attachmentId === options.attachment,
+  );
   if (attachments.length === 0) throw new CliError("No matching attachments.", "attachments_not_found");
   await mkdir(outDir, { recursive: true });
   const saved = [];
   for (const attachment of attachments) {
-    const data = await getAttachment({ messageId: id, attachmentId: attachment.attachmentId, oauthClient }) as Record<string, unknown>;
-    if (typeof data.data !== "string") throw new CliError("Attachment response did not include data.", "attachment_data_missing");
+    const data = await getAttachment({
+      messageId,
+      attachmentId: attachment.attachmentId,
+      oauthClient,
+    }) as Record<string, unknown>;
+    if (typeof data.data !== "string") {
+      throw new CliError("Attachment response did not include data.", "attachment_data_missing");
+    }
+    const content = base64urlDecode(data.data);
     const file = join(outDir, basename(attachment.filename));
-    await writeFile(file, base64urlDecode(data.data));
-    saved.push({ file, bytes: attachment.size, attachmentId: attachment.attachmentId });
+    try {
+      await writeFile(file, content, { flag: options.force === true ? "w" : "wx" });
+    } catch (error) {
+      if (isFileExists(error)) {
+        throw new CliError("Attachment destination already exists. Use --force to overwrite it.", "file_exists", {
+          path: file,
+        });
+      }
+      throw new CliError("Failed to write attachment.", "file_write_failed", {
+        path: file,
+        cause: errorMessage(error),
+      });
+    }
+    saved.push({ file, bytes: content.byteLength, attachmentId: attachment.attachmentId });
   }
   return { ok: true, downloaded: saved };
+}
+
+function stringNumber(value: number | undefined): string | undefined {
+  return value === undefined ? undefined : String(value);
+}
+
+function stringBoolean(value: boolean | undefined): string | undefined {
+  return value === undefined ? undefined : String(value);
+}
+
+function isFileExists(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST";
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

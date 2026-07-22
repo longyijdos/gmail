@@ -1,39 +1,40 @@
-import { modifyMessages, messageAction } from "@/gmail";
-import { labelsForOrganize, resolveTargets } from "./helpers";
+import { messageAction, modifyMessages } from "@/gmail";
+import { CliError } from "@/utils";
+import { labelsForOrganize, resolveTargets, variadicArguments } from "./helpers";
 import type { CommandContext } from "./types";
 
-const MODIFY_COMMANDS = new Set([
-  "modify",
-  "markread",
-  "markunread",
-  "star",
-  "unstar",
-  "archive",
-  "unarchive",
-  "spam",
-  "unspam",
-]);
-
-export async function handleOrganizeCommand(context: CommandContext): Promise<unknown | undefined> {
-  const { parsed, command, subcommand, rest, oauthClient } = context;
-  if (MODIFY_COMMANDS.has(command)) {
-    const ids = await resolveTargets(positionals(subcommand, rest), parsed.flags, oauthClient);
-    const labels = await labelsForOrganize(command, parsed.flags, oauthClient);
-    const data = await modifyMessages({ ids, ...labels, oauthClient });
-    return { ok: true, updated: ids.length, batches: Math.ceil(ids.length / 1000), data };
-  }
-  if (command === "trash" || command === "untrash") {
-    const ids = await resolveTargets(positionals(subcommand, rest), parsed.flags, oauthClient);
-    const done = [];
-    for (const id of ids) {
-      await messageAction({ id, action: command, oauthClient });
-      done.push(id);
+export async function handleOrganizeCommand(context: CommandContext): Promise<unknown> {
+  const { id, args, options, oauthClient } = context;
+  const ids = await resolveTargets(variadicArguments(args), options, oauthClient);
+  if (id === "messages.trash" || id === "messages.untrash") {
+    if (options.dryRun === true) return { ok: true, dryRun: true, matched: ids.length, ids };
+    const action = id === "messages.trash" ? "trash" : "untrash";
+    const completed: string[] = [];
+    for (const messageId of ids) {
+      try {
+        await messageAction({ id: messageId, action, oauthClient });
+        completed.push(messageId);
+      } catch (error) {
+        throw new CliError(`Gmail ${action} operation failed after partially completing.`, "gmail_partial_failure", {
+          action,
+          completed: completed.length,
+          completedIds: completed,
+          failedId: messageId,
+          cause: errorMessage(error),
+        });
+      }
     }
-    return { ok: true, [command === "trash" ? "trashed" : "untrashed"]: done.length, ids: done };
+    return { ok: true, [action === "trash" ? "trashed" : "untrashed"]: completed.length, ids: completed };
   }
-  return undefined;
+
+  const labels = await labelsForOrganize(id, options, oauthClient);
+  if (options.dryRun === true) {
+    return { ok: true, dryRun: true, matched: ids.length, ids, ...labels };
+  }
+  const data = await modifyMessages({ ids, ...labels, oauthClient });
+  return { ok: true, updated: ids.length, batches: Math.ceil(ids.length / 1000), data };
 }
 
-function positionals(subcommand: string | undefined, rest: string[]): string[] {
-  return subcommand === undefined ? rest : [subcommand, ...rest];
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

@@ -11,16 +11,41 @@ import {
   saveCredentials,
   startCallbackServer,
 } from "@/auth";
-import { buildProgram, formatCommandOutput, parseArgs, wantsJson } from "@/cli";
-import { collectMessageIds } from "@/commands";
+import { executeCommand } from "@/app";
+import { buildProgram, formatCommandOutput } from "@/cli";
+import { collectMessageIds, type CommandInvocation } from "@/commands";
 import { buildRaw, encodeMime, modifyMessages, parseAddresses, profile } from "@/gmail";
 
 describe("args", () => {
-  test("parses repeated flags and positionals", () => {
-    expect(parseArgs(["messages", "list", "--label-id", "INBOX", "--label-id=SENT"])).toEqual({
-      positionals: ["messages", "list"],
-      flags: { "label-id": ["INBOX", "SENT"] },
+  test("Commander produces typed repeated options and positionals", async () => {
+    let invocation: CommandInvocation | undefined;
+    const program = buildProgram(async (current) => {
+      invocation = current;
     });
+    await program.parseAsync(["messages", "list", "--label-id", "INBOX", "--label-id=SENT"], { from: "user" });
+    expect(invocation).toMatchObject({
+      id: "messages.list",
+      args: [],
+      options: { labelId: ["INBOX", "SENT"] },
+    });
+  });
+
+  test("keeps positional arguments after boolean options", async () => {
+    const invocations: CommandInvocation[] = [];
+    for (const argv of [
+      ["read", "--raw", "message-1"],
+      ["reply", "--all", "message-1", "--body", "ok"],
+      ["forward", "--no-attachments", "message-1", "--to", "a@example.com"],
+    ]) {
+      const program = buildProgram(async (current) => {
+        invocations.push(current);
+      });
+      await program.parseAsync(argv, { from: "user" });
+    }
+    expect(invocations.map((invocation) => invocation.args[0])).toEqual(["message-1", "message-1", "message-1"]);
+    expect(invocations[0]?.options.raw).toBe(true);
+    expect(invocations[1]?.options.all).toBe(true);
+    expect(invocations[2]?.options.attachments).toBe(false);
   });
 
   test("commander rejects unknown options", async () => {
@@ -32,21 +57,24 @@ describe("args", () => {
   });
 
   test("commander accepts global OAuth options after nested commands", async () => {
-    let called = false;
-    const program = buildProgram(async () => {
-      called = true;
+    let invocation: CommandInvocation | undefined;
+    const program = buildProgram(async (current) => {
+      invocation = current;
     });
     await program.parseAsync(["auth", "login", "--no-open", "--client-id", "test", "--scope", "readonly"], { from: "user" });
-    expect(called).toBe(true);
+    expect(invocation).toMatchObject({
+      id: "auth.login",
+      options: { clientId: "test", open: false, scope: ["readonly"] },
+    });
   });
 
   test("JSON output is available for Gmail commands only", async () => {
-    let called = false;
-    const gmailProgram = buildProgram(async () => {
-      called = true;
+    let invocation: CommandInvocation | undefined;
+    const gmailProgram = buildProgram(async (current) => {
+      invocation = current;
     });
     await gmailProgram.parseAsync(["profile", "--json"], { from: "user" });
-    expect(called).toBe(true);
+    expect(invocation).toMatchObject({ id: "profile", options: { json: true } });
 
     const authProgram = buildProgram(async () => undefined)
       .configureOutput({ writeErr: () => undefined, outputError: () => undefined });
@@ -73,7 +101,7 @@ describe("text output", () => {
         nextPageToken: "next-token",
         resultSizeEstimate: 12,
       },
-    }, ["messages", "list"])).toBe([
+    }, "messages.list")).toBe([
       "1 message(s).",
       "message-1\tthread-1",
       "Next page: next-token",
@@ -88,12 +116,47 @@ describe("text output", () => {
       state: "unauthorized",
       refreshable: false,
       credentialsPath: "/tmp/gml/credentials.json",
-    }, ["auth", "status"])).toContain("Not authorized.\nState: unauthorized");
+    }, "auth.status")).toContain("Not authorized.\nState: unauthorized");
   });
 
-  test("does not enable JSON mode for auth commands", () => {
-    expect(wantsJson(["auth", "status", "--json"])).toBe(false);
-    expect(wantsJson(["profile", "--json"])).toBe(true);
+  test("formats bulk dry runs without claiming messages were updated", () => {
+    expect(formatCommandOutput({
+      ok: true,
+      dryRun: true,
+      matched: 2,
+      ids: ["message-1", "message-2"],
+    }, "messages.archive")).toBe([
+      "Dry run: 2 message(s) matched.",
+      "message-1",
+      "message-2",
+    ].join("\n"));
+  });
+});
+
+describe("command execution", () => {
+  test("requires an explicit limit or --all for query-based writes", async () => {
+    const outcome = await executeCommand(["archive", "--query", "is:inbox"]);
+    expect(outcome).toMatchObject({
+      ok: false,
+      error: { code: "bulk_limit_required" },
+      invocation: { id: "messages.archive" },
+    });
+  });
+
+  test("rejects modify operations with no label changes", async () => {
+    const outcome = await executeCommand(["modify", "message-1"]);
+    expect(outcome).toMatchObject({
+      ok: false,
+      error: { code: "label_change_missing" },
+    });
+  });
+
+  test("reports malformed request bodies as input errors", async () => {
+    const outcome = await executeCommand(["request", "POST", "/users/me/messages", "--body", "{"]);
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) throw new Error("Expected command execution to fail.");
+    expect(outcome.error).toMatchObject({ code: "json_invalid" });
+    expect(outcome.invocation?.id).toBe("request");
   });
 });
 

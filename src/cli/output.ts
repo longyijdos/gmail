@@ -1,56 +1,21 @@
 import { errorToJson, writeJson } from "./json";
+import type { CommandId, CommandInvocation } from "@/commands";
 
 type JsonRecord = Record<string, unknown>;
 
-const JSON_COMMANDS = new Set([
-  "profile",
-  "labels",
-  "labels list",
-  "label-create",
-  "label-delete",
-  "label-rename",
-  "list",
-  "search",
-  "messages list",
-  "messages get",
-  "read",
-  "threads",
-  "thread",
-  "attachments",
-  "download",
-  "send",
-  "reply",
-  "forward",
-  "draft",
-  "drafts",
-  "draft-send",
-  "draft-delete",
-  "modify",
-  "trash",
-  "untrash",
-  "markread",
-  "markunread",
-  "star",
-  "unstar",
-  "archive",
-  "unarchive",
-  "spam",
-  "unspam",
-  "request",
-]);
-const ROOT_COMMANDS = new Set(["auth", ...[...JSON_COMMANDS].map((command) => command.split(" ")[0]!)]);
+type OutputContext = Pick<CommandInvocation, "id" | "options">;
 
-export function writeCommandOutput(value: unknown, argv: string[]): void {
-  if (wantsJson(argv)) {
+export function writeCommandOutput(value: unknown, context: OutputContext): void {
+  if (context.options.json === true) {
     writeJson(value);
     return;
   }
-  process.stdout.write(`${formatCommandOutput(value, argv)}\n`);
+  process.stdout.write(`${formatCommandOutput(value, context.id)}\n`);
 }
 
-export function writeCommandError(error: unknown, argv: string[]): void {
+export function writeCommandError(error: unknown, context?: OutputContext): void {
   const value = errorToJson(error);
-  if (wantsJson(argv)) {
+  if (context?.options.json === true) {
     process.stderr.write(`${JSON.stringify(value, null, 2)}\n`);
     return;
   }
@@ -61,11 +26,10 @@ export function writeCommandError(error: unknown, argv: string[]): void {
   process.stderr.write(`${code}: ${message}${suffix}\n`);
 }
 
-export function formatCommandOutput(value: unknown, argv: string[]): string {
+export function formatCommandOutput(value: unknown, command: CommandId): string {
   const root = asRecord(value) ?? {};
-  const command = commandKey(argv);
 
-  if (command === "auth login") {
+  if (command === "auth.login") {
     return [
       "Authorized Gmail access.",
       `Scopes: ${stringArray(root.scopes).join(", ") || "none"}`,
@@ -73,7 +37,7 @@ export function formatCommandOutput(value: unknown, argv: string[]): string {
       ...(root.expiresAt === undefined ? [] : [`Expires: ${stringValue(root.expiresAt)}`]),
     ].join("\n");
   }
-  if (command === "auth status") {
+  if (command === "auth.status") {
     return [
       root.authorized === true ? "Authorized." : "Not authorized.",
       `State: ${stringValue(root.state)}`,
@@ -84,29 +48,30 @@ export function formatCommandOutput(value: unknown, argv: string[]): string {
       ...(root.credentialsPath === undefined ? [] : [`Credentials: ${stringValue(root.credentialsPath)}`]),
     ].join("\n");
   }
-  if (command === "auth logout") return "Logged out.";
+  if (command === "auth.logout") return "Logged out.";
 
   const data = root.data ?? value;
   if (command === "profile") return formatProfile(data);
-  if (command === "labels" || command === "labels list") return formatLabels(data);
-  if (command === "label-create" || command === "label-rename") return formatLabel(data);
-  if (command === "label-delete") return `Deleted label ${stringValue(root.id)}.`;
-  if (["list", "search", "messages list"].includes(command)) return formatMessageList(data);
-  if (command === "read") return formatRead(root);
-  if (command === "threads") return formatThreadList(data);
-  if (command === "attachments") return formatAttachments(data);
-  if (command === "download") return formatDownloads(root.downloaded);
-  if (["send", "reply", "forward", "draft-send"].includes(command)) {
-    return formatResource(command === "draft-send" ? "Message sent." : "Message sent.", data);
+  if (command === "labels.list") return formatLabels(data);
+  if (command === "labels.create" || command === "labels.rename") return formatLabel(data);
+  if (command === "labels.delete") return `Deleted label ${stringValue(root.id)}.`;
+  if (command === "messages.list") return formatMessageList(data);
+  if (command === "messages.read") return formatRead(root);
+  if (command === "threads.list") return formatThreadList(data);
+  if (command === "messages.attachments") return formatAttachments(data);
+  if (command === "messages.download") return formatDownloads(root.downloaded);
+  if (["messages.send", "messages.reply", "messages.forward", "drafts.send"].includes(command)) {
+    return formatResource("Message sent.", data);
   }
-  if (command === "draft") return formatResource("Draft created.", data);
-  if (command === "drafts") return formatDraftList(data);
-  if (command === "draft-delete") return `Deleted draft ${stringValue(root.draftId)}.`;
-  if (command === "trash" || command === "untrash") {
-    const count = root[command === "trash" ? "trashed" : "untrashed"];
-    return `${stringValue(count)} message(s) ${command === "trash" ? "trashed" : "restored"}.`;
+  if (command === "drafts.create") return formatResource("Draft created.", data);
+  if (command === "drafts.list") return formatDraftList(data);
+  if (command === "drafts.delete") return `Deleted draft ${stringValue(root.draftId)}.`;
+  if (root.dryRun === true) return formatDryRun(root);
+  if (command === "messages.trash" || command === "messages.untrash") {
+    const count = root[command === "messages.trash" ? "trashed" : "untrashed"];
+    return `${stringValue(count)} message(s) ${command === "messages.trash" ? "trashed" : "restored"}.`;
   }
-  if (["modify", "markread", "markunread", "star", "unstar", "archive", "unarchive", "spam", "unspam"].includes(command)) {
+  if (MODIFY_COMMANDS.has(command)) {
     const updated = stringValue(root.updated);
     const batches = stringValue(root.batches);
     return [
@@ -118,19 +83,17 @@ export function formatCommandOutput(value: unknown, argv: string[]): string {
   return formatValue(data);
 }
 
-export function wantsJson(argv: string[]): boolean {
-  const optionArgs = argv.slice(0, argv.indexOf("--") === -1 ? argv.length : argv.indexOf("--"));
-  return optionArgs.includes("--json") && JSON_COMMANDS.has(commandKey(argv));
-}
-
-function commandKey(argv: string[]): string {
-  const index = argv.findIndex((arg) => ROOT_COMMANDS.has(arg));
-  const first = index === -1 ? "" : argv[index]!;
-  const second = argv[index + 1];
-  if (["auth", "messages"].includes(first)) return `${first} ${second ?? ""}`.trim();
-  if (first === "labels" && second === "list") return "labels list";
-  return first;
-}
+const MODIFY_COMMANDS = new Set<CommandId>([
+  "messages.modify",
+  "messages.mark-read",
+  "messages.mark-unread",
+  "messages.star",
+  "messages.unstar",
+  "messages.archive",
+  "messages.unarchive",
+  "messages.spam",
+  "messages.unspam",
+]);
 
 function formatProfile(value: unknown): string {
   const profile = asRecord(value) ?? {};
@@ -225,6 +188,14 @@ function formatDownloads(value: unknown): string {
         .filter(Boolean)
         .join("\t");
     }),
+  ].join("\n");
+}
+
+function formatDryRun(root: JsonRecord): string {
+  const ids = stringArray(root.ids);
+  return [
+    `Dry run: ${stringValue(root.matched) || ids.length} message(s) matched.`,
+    ...ids,
   ].join("\n");
 }
 
