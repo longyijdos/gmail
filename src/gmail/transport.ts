@@ -108,18 +108,20 @@ function buildUrl(path: string, query?: Record<string, QueryValue>): URL {
 function gmailResponseError(response: Response, body: unknown, method: string, url: URL): CliError {
   const retryable = response.status === 429 || response.status >= 500;
   const code =
-    response.status === 401
-      ? "gmail_unauthorized"
-      : response.status === 403
-        ? "gmail_forbidden"
-        : response.status === 404
-          ? "gmail_not_found"
-          : response.status === 429
-            ? "gmail_rate_limited"
-            : response.status >= 500
-              ? "gmail_server_error"
-              : "gmail_request_failed";
-  return new CliError("Gmail API request failed.", code, {
+    response.status === 400
+      ? "gmail_invalid_argument"
+      : response.status === 401
+        ? "gmail_unauthorized"
+        : response.status === 403
+          ? "gmail_forbidden"
+          : response.status === 404
+            ? "gmail_not_found"
+            : response.status === 429
+              ? "gmail_rate_limited"
+              : response.status >= 500
+                ? "gmail_server_error"
+                : "gmail_request_failed";
+  return new CliError(gmailErrorMessage(code), code, {
     status: response.status,
     method,
     path: url.pathname,
@@ -128,6 +130,16 @@ function gmailResponseError(response: Response, body: unknown, method: string, u
     ...googleErrorDetails(body),
     response: body,
   });
+}
+
+function gmailErrorMessage(code: string): string {
+  if (code === "gmail_invalid_argument") return "Gmail API rejected an invalid request.";
+  if (code === "gmail_unauthorized") return "Gmail API rejected the access token.";
+  if (code === "gmail_forbidden") return "Gmail API denied this operation.";
+  if (code === "gmail_not_found") return "Gmail API resource was not found.";
+  if (code === "gmail_rate_limited") return "Gmail API request was rate limited.";
+  if (code === "gmail_server_error") return "Gmail API is temporarily unavailable.";
+  return "Gmail API request failed.";
 }
 
 function googleErrorDetails(body: unknown): Record<string, unknown> {

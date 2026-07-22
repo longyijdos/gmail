@@ -84,6 +84,38 @@ describe("Gmail API transport", () => {
     );
   });
 
+  test("maps invalid arguments to a stable non-retryable error", async () => {
+    await withGmailSandbox(
+      {
+        scopes: [GMAIL_SCOPES.readonly],
+        fetch() {
+          return Response.json(
+            {
+              error: {
+                status: "INVALID_ARGUMENT",
+                message: "Invalid id value",
+                errors: [{ reason: "invalidArgument" }],
+              },
+            },
+            { status: 400 },
+          );
+        },
+      },
+      async () => {
+        await expect(profile()).rejects.toMatchObject({
+          code: "gmail_invalid_argument",
+          message: "Gmail API rejected an invalid request.",
+          details: {
+            status: 400,
+            retryable: false,
+            googleStatus: "INVALID_ARGUMENT",
+            googleReason: "invalidArgument",
+          },
+        });
+      },
+    );
+  });
+
   test("refreshes once after a 401 response", async () => {
     const authorizations: string[] = [];
     await withGmailSandbox(
