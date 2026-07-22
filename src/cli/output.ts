@@ -38,9 +38,18 @@ export function formatCommandOutput(value: unknown, command: CommandId): string 
     ].join("\n");
   }
   if (command === "auth.status") {
+    const state = stringValue(root.state);
+    const status =
+      state === "authorized"
+        ? "Authorized."
+        : state === "refresh_required"
+          ? "Authorized; access token refresh required."
+          : state === "expired"
+            ? "Authorization expired."
+            : "Not authorized.";
     return [
-      root.authorized === true ? "Authorized." : "Not authorized.",
-      `State: ${stringValue(root.state)}`,
+      status,
+      `State: ${state}`,
       `Refreshable: ${yesNo(root.refreshable)}`,
       ...(root.clientId === undefined ? [] : [`Client: ${stringValue(root.clientId)}`]),
       ...(stringArray(root.scopes).length === 0 ? [] : [`Scopes: ${stringArray(root.scopes).join(", ")}`]),

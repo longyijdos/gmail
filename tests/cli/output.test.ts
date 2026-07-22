@@ -67,6 +67,15 @@ describe("text output", () => {
     ).toContain("Not authorized.\nState: unauthorized");
   });
 
+  test("distinguishes refreshable and terminal token expiry", () => {
+    expect(
+      formatCommandOutput({ ok: true, authorized: true, state: "refresh_required", refreshable: true }, "auth.status"),
+    ).toStartWith("Authorized; access token refresh required.\nState: refresh_required");
+    expect(
+      formatCommandOutput({ ok: true, authorized: false, state: "expired", refreshable: false }, "auth.status"),
+    ).toStartWith("Authorization expired.\nState: expired");
+  });
+
   test("marks truncated message bodies", () => {
     expect(
       formatCommandOutput(

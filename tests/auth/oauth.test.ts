@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { GMAIL_SCOPES, login, startCallbackServer } from "@/auth";
-import { withMockFetch, withNativeFetch } from "../support";
+import { authStatus, GMAIL_SCOPES, login, startCallbackServer } from "@/auth";
+import { withGmailSandbox, withMockFetch, withNativeFetch } from "../support";
 
 describe("OAuth callback", () => {
   test("responds once and resolves the authorization code", async () => {
@@ -57,6 +57,27 @@ describe("OAuth callback", () => {
           },
         });
         expect(authorizationReceived).toBe(true);
+      },
+    );
+  });
+});
+
+describe("OAuth status", () => {
+  test("reports expired tokens with stored refresh credentials as refresh required", async () => {
+    await withGmailSandbox(
+      {
+        scopes: [GMAIL_SCOPES.readonly],
+        token: { refreshToken: "refresh-token", expiresAt: Date.now() - 1_000 },
+        fetch() {
+          throw new Error("authStatus must not access the network");
+        },
+      },
+      async () => {
+        await expect(authStatus()).resolves.toMatchObject({
+          authorized: true,
+          state: "refresh_required",
+          refreshable: true,
+        });
       },
     );
   });

@@ -200,11 +200,15 @@ function isScopeSatisfied(required: string, granted: string[]): boolean {
 export async function authStatus(): Promise<Record<string, unknown>> {
   const credentials = await loadCredentials();
   const token = credentials.token;
+  const usable = token !== undefined && isUsable(token);
+  const refreshable = token?.refreshToken !== undefined && credentials.client !== undefined;
+  const state =
+    token === undefined ? "unauthorized" : usable ? "authorized" : refreshable ? "refresh_required" : "expired";
   return {
-    authorized: token !== undefined,
+    authorized: usable || refreshable,
     clientStored: credentials.client !== undefined,
-    state: token === undefined ? "unauthorized" : isUsable(token) ? "authorized" : "expired",
-    refreshable: token?.refreshToken !== undefined,
+    state,
+    refreshable,
     credentialsPath: credentialsPath(),
     clientId: credentials.client?.clientId,
     scopes: token?.scopes ?? [],
