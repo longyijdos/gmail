@@ -14,6 +14,7 @@ import { CliError } from "../cli";
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 const REFRESH_SKEW_MS = 60_000;
+const TOKEN_REQUEST_TIMEOUT_MS = 15_000;
 
 export const GMAIL_SCOPES = {
   full: "https://mail.google.com/",
@@ -40,7 +41,9 @@ export type NormalizedScopes = {
 export type LoginOptions = {
   openBrowser?: boolean;
   onAuthorizationUrl?: (url: string) => void | Promise<void>;
+  onAuthorizationReceived?: () => void | Promise<void>;
   onBrowserOpenError?: (error: unknown) => void | Promise<void>;
+  tokenRequestTimeoutMs?: number;
 };
 
 export function expandScopes(values: string[], fallback: string[] = ["readonly"]): string[] {
@@ -120,12 +123,14 @@ export async function login(
       }
     }
     const code = await wait;
+    await options.onAuthorizationReceived?.();
     const token = await exchangeCode({
       code,
       codeVerifier: pkce.codeVerifier,
       redirectUri: callback.redirectUri,
       client,
       scopes,
+      timeoutMs: options.tokenRequestTimeoutMs,
     });
     await saveCredentials({ client, token });
     return token;
@@ -212,6 +217,7 @@ async function exchangeCode(options: {
   redirectUri: string;
   client: OAuthClient;
   scopes: string[];
+  timeoutMs?: number;
 }): Promise<StoredToken> {
   const params = new URLSearchParams({
     code: options.code,
@@ -221,7 +227,7 @@ async function exchangeCode(options: {
     code_verifier: options.codeVerifier,
   });
   if (options.client.clientSecret) params.set("client_secret", options.client.clientSecret);
-  return parseTokenResponse(await tokenRequest(params), options.client, options.scopes);
+  return parseTokenResponse(await tokenRequest(params, options.timeoutMs), options.client, options.scopes);
 }
 
 async function refreshToken(client: OAuthClient, token: StoredToken): Promise<StoredToken> {
@@ -239,18 +245,51 @@ async function refreshToken(client: OAuthClient, token: StoredToken): Promise<St
   };
 }
 
-async function tokenRequest(params: URLSearchParams): Promise<unknown> {
-  const response = await fetch(TOKEN_ENDPOINT, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: params.toString(),
-    redirect: "error",
-  });
-  const text = await response.text();
-  const body = text ? JSON.parse(text) : {};
+async function tokenRequest(params: URLSearchParams, timeoutMs = TOKEN_REQUEST_TIMEOUT_MS): Promise<unknown> {
+  const controller = new AbortController();
+  const effectiveTimeoutMs = Math.max(1, timeoutMs);
+  const timer = setTimeout(() => controller.abort(), effectiveTimeoutMs);
+  let response: Response;
+  let text: string;
+  try {
+    response = await fetch(TOKEN_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: params.toString(),
+      redirect: "error",
+      signal: controller.signal,
+    });
+    text = await response.text();
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new CliError(
+        "Timed out connecting to the Google OAuth token endpoint. Check network or proxy access to oauth2.googleapis.com, then run `gml auth login` again.",
+        "oauth_token_timeout",
+        { endpoint: TOKEN_ENDPOINT, timeoutMs: effectiveTimeoutMs },
+      );
+    }
+    throw new CliError(
+      "Could not connect to the Google OAuth token endpoint. Check network or proxy access to oauth2.googleapis.com.",
+      "oauth_token_network_error",
+      { endpoint: TOKEN_ENDPOINT, cause: errorMessage(error) },
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+  let body: unknown = {};
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      throw new CliError("OAuth token endpoint returned a non-JSON response.", "oauth_protocol_error", {
+        status: response.status,
+        endpoint: TOKEN_ENDPOINT,
+      });
+    }
+  }
   if (!response.ok) {
     throw new CliError("OAuth token endpoint rejected the request.", "oauth_token_failed", {
       status: response.status,
@@ -350,7 +389,7 @@ export async function startCallbackServer(): Promise<CallbackServer> {
             reject(new CliError("OAuth callback did not include a code.", "oauth_code_missing"));
             return;
           }
-          respond(response, 200, "Authorization complete. You can return to gml.");
+          respond(response, 200, "Authorization received. Return to gml while it completes sign-in.");
           clearTimeout(timer);
           pending = undefined;
           resolve(code);
@@ -372,6 +411,10 @@ function respond(response: ServerResponse, status: number, message: string): voi
     "X-Content-Type-Options": "nosniff",
   });
   response.end(message);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 async function openBrowser(url: string): Promise<void> {

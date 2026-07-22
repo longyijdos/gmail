@@ -23,6 +23,9 @@ export async function handleAuthCommand(context: Omit<CommandContext, "oauthClie
           "",
         ].join("\n"));
       },
+      onAuthorizationReceived() {
+        process.stdout.write("Authorization received. Exchanging code for tokens...\n");
+      },
       onBrowserOpenError(error) {
         const message = error instanceof Error ? error.message : String(error);
         process.stdout.write([

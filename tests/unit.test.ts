@@ -6,6 +6,7 @@ import {
   expandScopes,
   GMAIL_SCOPES,
   hasAcceptedScope,
+  login,
   normalizeScopes,
   saveCredentials,
   startCallbackServer,
@@ -281,10 +282,52 @@ describe("OAuth callback", () => {
 
       const response = await fetch(url);
       expect(response.status).toBe(200);
-      expect(await response.text()).toBe("Authorization complete. You can return to gml.");
+      expect(await response.text()).toBe("Authorization received. Return to gml while it completes sign-in.");
       await expect(code).resolves.toBe("authorization-code");
     } finally {
       await callback.close();
+    }
+  });
+
+  test("times out while exchanging an authorization code for tokens", async () => {
+    const previousFetch = globalThis.fetch;
+    let authorizationReceived = false;
+    try {
+      globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+        return await new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+        });
+      }) as unknown as typeof fetch;
+
+      const result = login(
+        { clientId: "test-client" },
+        [GMAIL_SCOPES.readonly],
+        {
+          openBrowser: false,
+          tokenRequestTimeoutMs: 10,
+          async onAuthorizationUrl(authorizationUrl) {
+            const url = new URL(authorizationUrl);
+            const callbackUrl = new URL(url.searchParams.get("redirect_uri")!);
+            callbackUrl.searchParams.set("state", url.searchParams.get("state")!);
+            callbackUrl.searchParams.set("code", "sensitive-authorization-code");
+            await previousFetch(callbackUrl);
+          },
+          onAuthorizationReceived() {
+            authorizationReceived = true;
+          },
+        },
+      );
+
+      await expect(result).rejects.toMatchObject({
+        code: "oauth_token_timeout",
+        details: {
+          endpoint: "https://oauth2.googleapis.com/token",
+          timeoutMs: 10,
+        },
+      });
+      expect(authorizationReceived).toBe(true);
+    } finally {
+      globalThis.fetch = previousFetch;
     }
   });
 });
