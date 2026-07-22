@@ -3,6 +3,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 
 const SOURCE_ROOT = join(import.meta.dir, "../src");
+const TEST_ROOT = import.meta.dir;
 
 describe("module boundaries", () => {
   test("every top-level module exposes an index barrel", async () => {
@@ -20,6 +21,21 @@ describe("module boundaries", () => {
       const source = await readFile(file, "utf8");
       for (const match of source.matchAll(/["'](@\/[^/"']+\/[^"']+)["']/g)) {
         violations.push(`${relative(SOURCE_ROOT, file)}: ${match[1]}`);
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  test("tests mutate process globals only through support fixtures", async () => {
+    const violations: string[] = [];
+    for (const file of await listTypeScriptFiles(TEST_ROOT)) {
+      const testPath = relative(TEST_ROOT, file);
+      if (testPath.startsWith("support/")) continue;
+      const source = await readFile(file, "utf8");
+      if (/globalThis\.fetch\s*=/.test(source)) violations.push(`${testPath}: globalThis.fetch`);
+      if (/(?:process\.env\.GML_HOME\s*=|delete\s+process\.env\.GML_HOME)/.test(source)) {
+        violations.push(`${testPath}: process.env.GML_HOME`);
       }
     }
 
