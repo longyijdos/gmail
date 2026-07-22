@@ -3,16 +3,11 @@ import { expandScopes, GMAIL_SCOPES, hasAcceptedScope, normalizeScopes } from "@
 
 describe("Gmail scopes", () => {
   test("expands aliases and deduplicates", () => {
-    expect(expandScopes(["readonly,send", "send"])).toEqual([
-      GMAIL_SCOPES.readonly,
-      GMAIL_SCOPES.send,
-    ]);
+    expect(expandScopes(["readonly,send", "send"])).toEqual([GMAIL_SCOPES.readonly, GMAIL_SCOPES.send]);
   });
 
   test("rejects arbitrary scope URIs", () => {
-    expect(() => expandScopes(["https://www.googleapis.com/auth/drive.readonly"])).toThrow(
-      "Unknown Gmail scope alias",
-    );
+    expect(() => expandScopes(["https://www.googleapis.com/auth/drive.readonly"])).toThrow("Unknown Gmail scope alias");
   });
 
   test("supports the full Gmail scope alias", () => {
@@ -23,10 +18,12 @@ describe("Gmail scopes", () => {
     expect(normalizeScopes(["metadata,readonly,send"])).toEqual({
       requested: [GMAIL_SCOPES.metadata, GMAIL_SCOPES.readonly, GMAIL_SCOPES.send],
       normalized: [GMAIL_SCOPES.readonly, GMAIL_SCOPES.send],
-      removed: [{
-        scope: GMAIL_SCOPES.metadata,
-        reason: "gmail.metadata is redundant with full/readonly/modify and can restrict Gmail query parameters.",
-      }],
+      removed: [
+        {
+          scope: GMAIL_SCOPES.metadata,
+          reason: "gmail.metadata is redundant with full/readonly/modify and can restrict Gmail query parameters.",
+        },
+      ],
     });
   });
 
@@ -39,14 +36,8 @@ describe("Gmail scopes", () => {
   });
 
   test("accepts any scope supported by an operation", () => {
-    expect(hasAcceptedScope(
-      [GMAIL_SCOPES.readonly, GMAIL_SCOPES.compose],
-      [GMAIL_SCOPES.compose],
-    )).toBe(true);
-    expect(hasAcceptedScope(
-      [GMAIL_SCOPES.readonly, GMAIL_SCOPES.metadata],
-      [GMAIL_SCOPES.metadata],
-    )).toBe(true);
+    expect(hasAcceptedScope([GMAIL_SCOPES.readonly, GMAIL_SCOPES.compose], [GMAIL_SCOPES.compose])).toBe(true);
+    expect(hasAcceptedScope([GMAIL_SCOPES.readonly, GMAIL_SCOPES.metadata], [GMAIL_SCOPES.metadata])).toBe(true);
     expect(hasAcceptedScope([GMAIL_SCOPES.readonly], [GMAIL_SCOPES.metadata])).toBe(false);
   });
 });

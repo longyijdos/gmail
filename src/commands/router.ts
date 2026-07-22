@@ -1,11 +1,11 @@
 import { handleAuthCommand } from "./auth";
+import { resolveOAuthClient } from "./helpers";
 import { handleLabelCommand } from "./labels";
 import { handleOrganizeCommand } from "./organize";
 import { handleReadCommand } from "./read";
 import { handleRequestCommand } from "./request";
-import { handleWriteCommand } from "./write";
-import { resolveOAuthClient } from "./helpers";
 import type { CommandContext, CommandId, CommandInvocation } from "./types";
+import { handleWriteCommand } from "./write";
 
 const AUTH_COMMANDS = new Set<CommandId>(["auth.login", "auth.status", "auth.logout"]);
 const LABEL_COMMANDS = new Set<CommandId>(["labels.list", "labels.create", "labels.delete", "labels.rename"]);

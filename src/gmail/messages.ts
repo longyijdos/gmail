@@ -1,7 +1,7 @@
+import pLimit from "p-limit";
 import { GMAIL_SCOPES, type OAuthClient } from "@/auth";
 import { CliError } from "@/utils";
-import pLimit from "p-limit";
-import { buildRaw, header, type AttachmentInput } from "./mime";
+import { type AttachmentInput, buildRaw, header } from "./mime";
 import { gmailRequest } from "./transport";
 import type {
   BatchModifyResult,
@@ -30,9 +30,7 @@ export function listMessages(options: {
       labelIds: options.labelIds,
       includeSpamTrash: options.includeSpamTrash,
     },
-    acceptedScopes: options.q === undefined
-      ? [GMAIL_SCOPES.readonly, GMAIL_SCOPES.metadata]
-      : [GMAIL_SCOPES.readonly],
+    acceptedScopes: options.q === undefined ? [GMAIL_SCOPES.readonly, GMAIL_SCOPES.metadata] : [GMAIL_SCOPES.readonly],
     oauthClient: options.oauthClient,
   });
 }
@@ -47,9 +45,10 @@ export function getMessage(options: {
     method: "GET",
     path: `/users/me/messages/${encodeURIComponent(options.id)}`,
     query: { format: options.format, metadataHeaders: options.metadataHeaders },
-    acceptedScopes: options.format === "metadata" || options.format === "minimal"
-      ? [GMAIL_SCOPES.readonly, GMAIL_SCOPES.metadata]
-      : [GMAIL_SCOPES.readonly],
+    acceptedScopes:
+      options.format === "metadata" || options.format === "minimal"
+        ? [GMAIL_SCOPES.readonly, GMAIL_SCOPES.metadata]
+        : [GMAIL_SCOPES.readonly],
     oauthClient: options.oauthClient,
   });
 }
@@ -132,10 +131,11 @@ export async function modifyMessages(options: {
   removeLabelIds?: string[];
   oauthClient?: OAuthClient;
 }): Promise<GmailMessage | Record<string, never> | BatchModifyResult> {
-  if (options.ids.length === 1) {
+  const [messageId] = options.ids;
+  if (messageId !== undefined && options.ids.length === 1) {
     return gmailRequest({
       method: "POST",
-      path: `/users/me/messages/${encodeURIComponent(options.ids[0]!)}/modify`,
+      path: `/users/me/messages/${encodeURIComponent(messageId)}/modify`,
       body: { addLabelIds: options.addLabelIds ?? [], removeLabelIds: options.removeLabelIds ?? [] },
       acceptedScopes: [GMAIL_SCOPES.modify],
       oauthClient: options.oauthClient,
@@ -145,17 +145,19 @@ export async function modifyMessages(options: {
   const responses: Array<Record<string, never>> = [];
   for (let index = 0; index < options.ids.length; index += 1000) {
     try {
-      responses.push(await gmailRequest({
-        method: "POST",
-        path: "/users/me/messages/batchModify",
-        body: {
-          ids: options.ids.slice(index, index + 1000),
-          addLabelIds: options.addLabelIds ?? [],
-          removeLabelIds: options.removeLabelIds ?? [],
-        },
-        acceptedScopes: [GMAIL_SCOPES.modify],
-        oauthClient: options.oauthClient,
-      }));
+      responses.push(
+        await gmailRequest({
+          method: "POST",
+          path: "/users/me/messages/batchModify",
+          body: {
+            ids: options.ids.slice(index, index + 1000),
+            addLabelIds: options.addLabelIds ?? [],
+            removeLabelIds: options.removeLabelIds ?? [],
+          },
+          acceptedScopes: [GMAIL_SCOPES.modify],
+          oauthClient: options.oauthClient,
+        }),
+      );
     } catch (error) {
       throw new CliError("Gmail batch modify failed after partially completing.", "gmail_partial_failure", {
         operation: "batchModify",
@@ -166,7 +168,8 @@ export async function modifyMessages(options: {
       });
     }
   }
-  return responses.length === 1 ? responses[0]! : { responses };
+  const [response] = responses;
+  return response !== undefined && responses.length === 1 ? response : { responses };
 }
 
 export function messageAction(options: {

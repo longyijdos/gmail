@@ -3,11 +3,11 @@ import { createServer, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { CliError, fetchText, HttpNetworkError, HttpTimeoutError } from "@/utils";
 import {
-  type OAuthClient,
-  type StoredToken,
   credentialsPath,
   deleteCredentials,
   loadCredentials,
+  type OAuthClient,
+  type StoredToken,
   saveCredentials,
 } from "./credentials";
 
@@ -48,15 +48,11 @@ export type LoginOptions = {
 
 export function expandScopes(values: string[], fallback: string[] = ["readonly"]): string[] {
   const scopes = values.length === 0 ? fallback : values;
-  return normalizeScopes(
-    scopes.flatMap((value) => value.split(/[,\s]+/)).filter(Boolean),
-  ).normalized;
+  return normalizeScopes(scopes.flatMap((value) => value.split(/[,\s]+/)).filter(Boolean)).normalized;
 }
 
 export function normalizeScopes(values: string[], fallback: string[] = ["readonly"]): NormalizedScopes {
-  const aliases = (values.length === 0 ? fallback : values)
-    .flatMap((value) => value.split(/[,\s]+/))
-    .filter(Boolean);
+  const aliases = (values.length === 0 ? fallback : values).flatMap((value) => value.split(/[,\s]+/)).filter(Boolean);
   const requested = aliases.map((scope) => {
     if (scope in GMAIL_SCOPES) return GMAIL_SCOPES[scope as keyof typeof GMAIL_SCOPES];
     throw new CliError(`Unknown Gmail scope alias: ${scope}`, "scope_unknown", {
@@ -76,8 +72,7 @@ export function normalizeScopes(values: string[], fallback: string[] = ["readonl
     if (scope === metadata && metadataCovered) {
       removed.push({
         scope,
-        reason:
-          "gmail.metadata is redundant with full/readonly/modify and can restrict Gmail query parameters.",
+        reason: "gmail.metadata is redundant with full/readonly/modify and can restrict Gmail query parameters.",
       });
       return false;
     }
@@ -91,11 +86,7 @@ export function normalizeScopes(values: string[], fallback: string[] = ["readonl
   };
 }
 
-export async function login(
-  client: OAuthClient,
-  scopes: string[],
-  options: LoginOptions = {},
-): Promise<StoredToken> {
+export async function login(client: OAuthClient, scopes: string[], options: LoginOptions = {}): Promise<StoredToken> {
   const callback = await startCallbackServer();
   try {
     const pkce = createPkce();
@@ -145,7 +136,7 @@ export async function getAccessToken(
   forceRefresh = false,
 ): Promise<string> {
   const credentials = await loadCredentials();
-  let token = credentials.token;
+  const token = credentials.token;
   if (token === undefined) {
     throw new CliError("Not authorized. Run `gml auth login` first.", "not_authorized");
   }
@@ -155,13 +146,20 @@ export async function getAccessToken(
     throw new CliError("Stored token belongs to a different client. Run `gml auth login` again.", "client_changed");
   }
   if (!hasAcceptedScope(acceptedScopes, token.scopes)) {
-    throw new CliError("Stored token does not include a Gmail scope accepted by this operation. Re-run `gml auth login` with an accepted scope.", "scope_missing", {
-      accepted: acceptedScopes,
-    });
+    throw new CliError(
+      "Stored token does not include a Gmail scope accepted by this operation. Re-run `gml auth login` with an accepted scope.",
+      "scope_missing",
+      {
+        accepted: acceptedScopes,
+      },
+    );
   }
   if (!forceRefresh && isUsable(token)) return token.accessToken;
   if (!token.refreshToken) {
-    throw new CliError("Access token expired and no refresh token is available. Run `gml auth login` again.", "refresh_unavailable");
+    throw new CliError(
+      "Access token expired and no refresh token is available. Run `gml auth login` again.",
+      "refresh_unavailable",
+    );
   }
   if (refreshClient === undefined) {
     throw new CliError(
@@ -169,7 +167,7 @@ export async function getAccessToken(
       "client_credentials_required",
     );
   }
-  const refreshed = await refreshToken(refreshClient, token);
+  const refreshed = await refreshToken(refreshClient, token, token.refreshToken);
   await saveCredentials({ client: refreshClient, token: refreshed });
   return refreshed.accessToken;
 }
@@ -183,13 +181,15 @@ function isScopeSatisfied(required: string, granted: string[]): boolean {
   if (granted.includes(GMAIL_SCOPES.full)) return true;
   if (
     granted.includes(GMAIL_SCOPES.modify) &&
-    ([
-      GMAIL_SCOPES.readonly,
-      GMAIL_SCOPES.metadata,
-      GMAIL_SCOPES.send,
-      GMAIL_SCOPES.compose,
-      GMAIL_SCOPES.insert,
-    ] as string[]).includes(required)
+    (
+      [
+        GMAIL_SCOPES.readonly,
+        GMAIL_SCOPES.metadata,
+        GMAIL_SCOPES.send,
+        GMAIL_SCOPES.compose,
+        GMAIL_SCOPES.insert,
+      ] as string[]
+    ).includes(required)
   ) {
     return true;
   }
@@ -228,20 +228,20 @@ async function exchangeCode(options: {
     code_verifier: options.codeVerifier,
   });
   if (options.client.clientSecret) params.set("client_secret", options.client.clientSecret);
-  return parseTokenResponse(await tokenRequest(params, options.timeoutMs), options.client, options.scopes);
+  return parseTokenResponse(await tokenRequest(params, options.timeoutMs), options.scopes);
 }
 
-async function refreshToken(client: OAuthClient, token: StoredToken): Promise<StoredToken> {
+async function refreshToken(client: OAuthClient, token: StoredToken, refreshTokenValue: string): Promise<StoredToken> {
   const params = new URLSearchParams({
     client_id: client.clientId,
     grant_type: "refresh_token",
-    refresh_token: token.refreshToken!,
+    refresh_token: refreshTokenValue,
   });
   if (client.clientSecret) params.set("client_secret", client.clientSecret);
-  const refreshed = await parseTokenResponse(await tokenRequest(params), client, token.scopes);
+  const refreshed = await parseTokenResponse(await tokenRequest(params), token.scopes);
   return {
     ...refreshed,
-    refreshToken: refreshed.refreshToken ?? token.refreshToken,
+    refreshToken: refreshed.refreshToken ?? refreshTokenValue,
     scopes: refreshed.scopes.length === 0 ? token.scopes : refreshed.scopes,
   };
 }
@@ -251,15 +251,19 @@ async function tokenRequest(params: URLSearchParams, timeoutMs = TOKEN_REQUEST_T
   let response: Response;
   let text: string;
   try {
-    ({ response, text } = await fetchText(TOKEN_ENDPOINT, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/x-www-form-urlencoded",
+    ({ response, text } = await fetchText(
+      TOKEN_ENDPOINT,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: params.toString(),
+        redirect: "error",
       },
-      body: params.toString(),
-      redirect: "error",
-    }, effectiveTimeoutMs));
+      effectiveTimeoutMs,
+    ));
   } catch (error) {
     if (error instanceof HttpTimeoutError) {
       throw new CliError(
@@ -295,7 +299,7 @@ async function tokenRequest(params: URLSearchParams, timeoutMs = TOKEN_REQUEST_T
   return body;
 }
 
-function parseTokenResponse(value: unknown, client: OAuthClient, fallbackScopes: string[]): StoredToken {
+function parseTokenResponse(value: unknown, fallbackScopes: string[]): StoredToken {
   if (typeof value !== "object" || value === null) {
     throw new CliError("OAuth token response was not a JSON object.", "oauth_protocol_error");
   }
@@ -307,9 +311,10 @@ function parseTokenResponse(value: unknown, client: OAuthClient, fallbackScopes:
   if (tokenType !== "bearer") {
     throw new CliError("OAuth token response did not use Bearer token type.", "oauth_protocol_error");
   }
-  const expiresIn = typeof object.expires_in === "number" && Number.isFinite(object.expires_in)
-    ? Math.max(0, object.expires_in)
-    : undefined;
+  const expiresIn =
+    typeof object.expires_in === "number" && Number.isFinite(object.expires_in)
+      ? Math.max(0, object.expires_in)
+      : undefined;
   const scope = typeof object.scope === "string" ? object.scope.split(/\s+/).filter(Boolean) : fallbackScopes;
   return {
     accessToken: object.access_token,
@@ -353,10 +358,13 @@ export async function startCallbackServer(): Promise<CallbackServer> {
     redirectUri,
     waitForCode(expectedState: string) {
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-          pending = undefined;
-          reject(new CliError("OAuth login timed out waiting for browser callback.", "oauth_callback_timeout"));
-        }, 5 * 60 * 1000);
+        const timer = setTimeout(
+          () => {
+            pending = undefined;
+            reject(new CliError("OAuth login timed out waiting for browser callback.", "oauth_callback_timeout"));
+          },
+          5 * 60 * 1000,
+        );
         pending = (url, response) => {
           if (url.pathname !== "/oauth/callback") {
             respond(response, 404, "OAuth callback not found.");
@@ -393,7 +401,7 @@ export async function startCallbackServer(): Promise<CallbackServer> {
       });
     },
     close() {
-      return new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+      return new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
     },
   };
 }
@@ -414,13 +422,15 @@ function errorMessage(error: unknown): string {
 }
 
 async function openBrowser(url: string): Promise<void> {
-  const command = process.platform === "darwin" ? ["open", url] : process.platform === "linux" ? ["xdg-open", url] : undefined;
+  const command =
+    process.platform === "darwin" ? ["open", url] : process.platform === "linux" ? ["xdg-open", url] : undefined;
   if (command === undefined) {
     throw new CliError(`Opening a browser is not supported on ${process.platform}.`, "browser_unsupported");
   }
   const child = Bun.spawn(command, { stdin: "ignore", stdout: "ignore", stderr: "ignore" });
   const exitCode = await child.exited;
-  if (exitCode !== 0) throw new CliError("Failed to open browser for OAuth login.", "browser_open_failed", { exitCode });
+  if (exitCode !== 0)
+    throw new CliError("Failed to open browser for OAuth login.", "browser_open_failed", { exitCode });
 }
 
 function createPkce(): { codeVerifier: string; codeChallenge: string } {

@@ -21,11 +21,7 @@ export function createLabel(options: { name: string; oauthClient?: OAuthClient }
   });
 }
 
-export function patchLabel(options: {
-  id: string;
-  name: string;
-  oauthClient?: OAuthClient;
-}): Promise<GmailLabel> {
+export function patchLabel(options: { id: string; name: string; oauthClient?: OAuthClient }): Promise<GmailLabel> {
   return gmailRequest({
     method: "PATCH",
     path: `/users/me/labels/${encodeURIComponent(options.id)}`,

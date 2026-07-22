@@ -1,1 +1,1 @@
-export { executeCommand, type ExecutionOutcome } from "./execute";
+export { type ExecutionOutcome, executeCommand } from "./execute";

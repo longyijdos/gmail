@@ -1,5 +1,5 @@
 import { GMAIL_SCOPES, type OAuthClient } from "@/auth";
-import { buildRaw, type AttachmentInput } from "./mime";
+import { type AttachmentInput, buildRaw } from "./mime";
 import { gmailRequest } from "./transport";
 import type { GmailDraft, GmailMessage, ListDraftsResponse } from "./types";
 

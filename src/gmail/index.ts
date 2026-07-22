@@ -10,6 +10,7 @@ export {
   summarizeMessages,
 } from "./messages";
 export {
+  type AttachmentInput,
   base64urlDecode,
   buildRaw,
   encodeMime,
@@ -19,25 +20,24 @@ export {
   htmlToText,
   listAttachments,
   parseAddresses,
-  type AttachmentInput,
 } from "./mime";
 export { profile } from "./profile";
 export { getThread, listThreads } from "./threads";
 export { gmailRequest, type QueryValue, type RequestOptions } from "./transport";
-export {
-  type BatchModifyResult,
-  type GmailDraft,
-  type GmailHeader,
-  type GmailLabel,
-  type GmailMessage,
-  type GmailMessagePart,
-  type GmailMessagePartBody,
-  type GmailProfile,
-  type GmailThread,
-  type ListDraftsResponse,
-  type ListLabelsResponse,
-  type ListMessagesResponse,
-  type ListMessagesWithSummariesResponse,
-  type ListThreadsResponse,
-  type MessageSummary,
+export type {
+  BatchModifyResult,
+  GmailDraft,
+  GmailHeader,
+  GmailLabel,
+  GmailMessage,
+  GmailMessagePart,
+  GmailMessagePartBody,
+  GmailProfile,
+  GmailThread,
+  ListDraftsResponse,
+  ListLabelsResponse,
+  ListMessagesResponse,
+  ListMessagesWithSummariesResponse,
+  ListThreadsResponse,
+  MessageSummary,
 } from "./types";

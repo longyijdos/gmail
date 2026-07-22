@@ -8,10 +8,9 @@ describe("CLI arguments", () => {
     const program = buildProgram(async (current) => {
       invocation = current;
     });
-    await program.parseAsync(
-      ["messages", "list", "--label-id", "INBOX", "--label-id=SENT", "--summary"],
-      { from: "user" },
-    );
+    await program.parseAsync(["messages", "list", "--label-id", "INBOX", "--label-id=SENT", "--summary"], {
+      from: "user",
+    });
     expect(invocation).toMatchObject({
       id: "messages.list",
       args: [],
@@ -31,11 +30,7 @@ describe("CLI arguments", () => {
       });
       await program.parseAsync(argv, { from: "user" });
     }
-    expect(invocations.map((invocation) => invocation.args[0])).toEqual([
-      "message-1",
-      "message-1",
-      "message-1",
-    ]);
+    expect(invocations.map((invocation) => invocation.args[0])).toEqual(["message-1", "message-1", "message-1"]);
     expect(invocations[0]?.options.raw).toBe(true);
     expect(invocations[1]?.options.all).toBe(true);
     expect(invocations[2]?.options.attachments).toBe(false);
@@ -43,9 +38,9 @@ describe("CLI arguments", () => {
 
   test("rejects unknown options", async () => {
     const program = quietProgram();
-    await expect(
-      program.parseAsync(["list", "--max-result", "10"], { from: "user" }),
-    ).rejects.toMatchObject({ code: "commander.unknownOption" });
+    await expect(program.parseAsync(["list", "--max-result", "10"], { from: "user" })).rejects.toMatchObject({
+      code: "commander.unknownOption",
+    });
   });
 
   test("accepts global OAuth options after nested commands", async () => {
@@ -53,10 +48,9 @@ describe("CLI arguments", () => {
     const program = buildProgram(async (current) => {
       invocation = current;
     });
-    await program.parseAsync(
-      ["auth", "login", "--no-open", "--client-id", "test", "--scope", "readonly"],
-      { from: "user" },
-    );
+    await program.parseAsync(["auth", "login", "--no-open", "--client-id", "test", "--scope", "readonly"], {
+      from: "user",
+    });
     expect(invocation).toMatchObject({
       id: "auth.login",
       options: { clientId: "test", open: false, scope: ["readonly"] },
@@ -71,9 +65,9 @@ describe("CLI arguments", () => {
     await gmailProgram.parseAsync(["profile", "--json"], { from: "user" });
     expect(invocation).toMatchObject({ id: "profile", options: { json: true } });
 
-    await expect(
-      quietProgram().parseAsync(["auth", "status", "--json"], { from: "user" }),
-    ).rejects.toMatchObject({ code: "commander.unknownOption" });
+    await expect(quietProgram().parseAsync(["auth", "status", "--json"], { from: "user" })).rejects.toMatchObject({
+      code: "commander.unknownOption",
+    });
   });
 
   test("validates Gmail list page sizes", async () => {
@@ -84,6 +78,8 @@ describe("CLI arguments", () => {
 });
 
 function quietProgram() {
-  return buildProgram(async () => undefined)
-    .configureOutput({ writeErr: () => undefined, outputError: () => undefined });
+  return buildProgram(async () => undefined).configureOutput({
+    writeErr: () => undefined,
+    outputError: () => undefined,
+  });
 }

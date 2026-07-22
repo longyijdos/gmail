@@ -20,9 +20,7 @@ export function listThreads(options: {
       labelIds: options.labelIds,
       includeSpamTrash: options.includeSpamTrash,
     },
-    acceptedScopes: options.q === undefined
-      ? [GMAIL_SCOPES.readonly, GMAIL_SCOPES.metadata]
-      : [GMAIL_SCOPES.readonly],
+    acceptedScopes: options.q === undefined ? [GMAIL_SCOPES.readonly, GMAIL_SCOPES.metadata] : [GMAIL_SCOPES.readonly],
     oauthClient: options.oauthClient,
   });
 }
@@ -37,9 +35,10 @@ export function getThread(options: {
     method: "GET",
     path: `/users/me/threads/${encodeURIComponent(options.id)}`,
     query: { format: options.format, metadataHeaders: options.metadataHeaders },
-    acceptedScopes: options.format === "metadata" || options.format === "minimal"
-      ? [GMAIL_SCOPES.readonly, GMAIL_SCOPES.metadata]
-      : [GMAIL_SCOPES.readonly],
+    acceptedScopes:
+      options.format === "metadata" || options.format === "minimal"
+        ? [GMAIL_SCOPES.readonly, GMAIL_SCOPES.metadata]
+        : [GMAIL_SCOPES.readonly],
     oauthClient: options.oauthClient,
   });
 }

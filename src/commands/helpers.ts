@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { type OAuthClient, readGoogleClientSecretFile } from "@/auth";
-import { guessMimeType, listLabels, listMessages, type AttachmentInput } from "@/gmail";
+import { type AttachmentInput, guessMimeType, listLabels, listMessages } from "@/gmail";
 import { CliError } from "@/utils";
 import type { CommandArgument, CommandId, CommandOptions } from "./types";
 
@@ -54,11 +54,7 @@ export async function resolveAttachments(options: CommandOptions): Promise<Attac
 }
 
 export function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 export async function resolveLabelOptions(
@@ -92,9 +88,7 @@ export async function resolveLabelId(label: string, oauthClient?: OAuthClient): 
   const response = (await listLabels(oauthClient)) as {
     labels?: Array<{ id?: string; name?: string }>;
   };
-  const match = response.labels?.find(
-    (item) => item.id === label || item.name?.toLowerCase() === label.toLowerCase(),
-  );
+  const match = response.labels?.find((item) => item.id === label || item.name?.toLowerCase() === label.toLowerCase());
   if (!match?.id) throw new CliError(`Unknown label: ${label}`, "label_unknown");
   return match.id;
 }
@@ -116,15 +110,18 @@ export async function resolveTargets(
     if (options.maxResults !== undefined && options.all === true) {
       throw new CliError("Use either --max-results or --all, not both.", "args_invalid");
     }
-    result.push(...await collectMessageIds(
-      (pageToken, pageSize) => listMessages({
-        q: options.query,
-        pageToken,
-        maxResults: pageSize,
-        oauthClient,
-      }) as Promise<MessageIdPage>,
-      options.maxResults,
-    ));
+    result.push(
+      ...(await collectMessageIds(
+        (pageToken, pageSize) =>
+          listMessages({
+            q: options.query,
+            pageToken,
+            maxResults: pageSize,
+            oauthClient,
+          }) as Promise<MessageIdPage>,
+        options.maxResults,
+      )),
+    );
   }
   const unique = [...new Set(result)];
   if (unique.length === 0) {
@@ -158,7 +155,7 @@ export async function collectMessageIds(
     }
 
     const nextPageToken = page.nextPageToken;
-    if (!nextPageToken || limit !== undefined && ids.length >= limit) break;
+    if (!nextPageToken || (limit !== undefined && ids.length >= limit)) break;
     if (seenPageTokens.has(nextPageToken)) {
       throw new CliError("Gmail returned a repeated page token.", "pagination_loop", {
         pageToken: nextPageToken,
@@ -187,20 +184,32 @@ export async function labelsForOrganize(
     "messages.unspam": { add: ["INBOX"], remove: ["SPAM"] },
   };
   const preset = presets[command] ?? {};
-  const addLabelIds = [...new Set(await Promise.all(
-    [...(preset.add ?? []), ...(options.add ?? [])].map((label) => resolveLabelId(label, oauthClient)),
-  ))];
-  const removeLabelIds = [...new Set(await Promise.all(
-    [...(preset.remove ?? []), ...(options.remove ?? [])].map((label) => resolveLabelId(label, oauthClient)),
-  ))];
+  const addLabelIds = [
+    ...new Set(
+      await Promise.all(
+        [...(preset.add ?? []), ...(options.add ?? [])].map((label) => resolveLabelId(label, oauthClient)),
+      ),
+    ),
+  ];
+  const removeLabelIds = [
+    ...new Set(
+      await Promise.all(
+        [...(preset.remove ?? []), ...(options.remove ?? [])].map((label) => resolveLabelId(label, oauthClient)),
+      ),
+    ),
+  ];
   if (command === "messages.modify" && addLabelIds.length === 0 && removeLabelIds.length === 0) {
     throw new CliError("Modify requires at least one --add or --remove label.", "label_change_missing");
   }
   if (addLabelIds.length > 100 || removeLabelIds.length > 100) {
-    throw new CliError("Gmail allows at most 100 labels to be added or removed per modify request.", "label_limit_exceeded", {
-      add: addLabelIds.length,
-      remove: removeLabelIds.length,
-    });
+    throw new CliError(
+      "Gmail allows at most 100 labels to be added or removed per modify request.",
+      "label_limit_exceeded",
+      {
+        add: addLabelIds.length,
+        remove: removeLabelIds.length,
+      },
+    );
   }
   return { addLabelIds, removeLabelIds };
 }
@@ -209,9 +218,8 @@ export async function readJsonInput(options: CommandOptions): Promise<unknown> {
   if (options.body !== undefined && options.bodyFile !== undefined) {
     throw new CliError("Use either --body or --body-file, not both.", "args_invalid");
   }
-  const value = options.bodyFile === undefined
-    ? options.body
-    : await readTextFile(options.bodyFile, "JSON request body");
+  const value =
+    options.bodyFile === undefined ? options.body : await readTextFile(options.bodyFile, "JSON request body");
   if (value === undefined) return undefined;
   try {
     return JSON.parse(value);
@@ -222,18 +230,9 @@ export async function readJsonInput(options: CommandOptions): Promise<unknown> {
   }
 }
 
-export async function resolveOAuthClient(
-  options: CommandOptions,
-  required: true,
-): Promise<OAuthClient>;
-export async function resolveOAuthClient(
-  options: CommandOptions,
-  required: false,
-): Promise<OAuthClient | undefined>;
-export async function resolveOAuthClient(
-  options: CommandOptions,
-  required: boolean,
-): Promise<OAuthClient | undefined> {
+export async function resolveOAuthClient(options: CommandOptions, required: true): Promise<OAuthClient>;
+export async function resolveOAuthClient(options: CommandOptions, required: false): Promise<OAuthClient | undefined>;
+export async function resolveOAuthClient(options: CommandOptions, required: boolean): Promise<OAuthClient | undefined> {
   const file = options.clientSecretFile ?? process.env.GML_CLIENT_SECRET_FILE;
   const explicitClientId = options.clientId ?? process.env.GML_CLIENT_ID;
   const explicitClientSecret = options.clientSecret ?? process.env.GML_CLIENT_SECRET;

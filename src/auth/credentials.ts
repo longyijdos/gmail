@@ -48,10 +48,13 @@ export async function loadCredentials(env?: NodeJS.ProcessEnv): Promise<Credenti
   return parseCredentialsFile(JSON.parse(raw));
 }
 
-export async function saveCredentials(credentials: {
-  client: OAuthClient;
-  token: StoredToken;
-}, env?: NodeJS.ProcessEnv): Promise<void> {
+export async function saveCredentials(
+  credentials: {
+    client: OAuthClient;
+    token: StoredToken;
+  },
+  env?: NodeJS.ProcessEnv,
+): Promise<void> {
   await writePrivateJson(credentialsPath(env), {
     version: CREDENTIALS_FILE_VERSION,
     client: credentials.client,
@@ -67,7 +70,7 @@ export async function readGoogleClientSecretFile(filePath: string): Promise<OAut
   let raw: string;
   try {
     raw = await readFile(filePath, "utf8");
-  } catch (error) {
+  } catch {
     throw new CliError("Failed to read Google OAuth client secret file.", "client_secret_file_read_failed", {
       path: filePath,
     });
@@ -90,7 +93,7 @@ async function writePrivateJson(filePath: string, value: unknown): Promise<void>
       mode: 0o600,
     });
     await rename(tmp, filePath);
-  } catch (error) {
+  } catch {
     await unlink(tmp).catch(() => undefined);
     throw new CliError("Failed to write private config file.", "config_write_failed", {
       path: filePath,
@@ -153,20 +156,12 @@ function readStringArray(value: unknown, name: string): string[] {
   return value.slice();
 }
 
-function optionalString<TKey extends string>(
-  value: unknown,
-  key: TKey,
-  parent: string,
-): { [K in TKey]?: string } {
+function optionalString<TKey extends string>(value: unknown, key: TKey, parent: string): { [K in TKey]?: string } {
   if (value === undefined) return {};
   return { [key]: readString(value, `${parent}.${key}`) } as { [K in TKey]?: string };
 }
 
-function optionalNumber<TKey extends string>(
-  value: unknown,
-  key: TKey,
-  parent: string,
-): { [K in TKey]?: number } {
+function optionalNumber<TKey extends string>(value: unknown, key: TKey, parent: string): { [K in TKey]?: number } {
   if (value === undefined) return {};
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
     throw new CliError(`${parent}.${key} must be a positive number.`, "json_invalid");

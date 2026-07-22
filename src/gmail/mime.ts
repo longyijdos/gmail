@@ -126,7 +126,7 @@ export function htmlToText(html: string): string {
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, "\"")
+    .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -166,24 +166,23 @@ export function parseAddresses(value: string): Array<{ name?: string; email: str
   if (parsed === null) {
     throw new CliError("Invalid email address list.", "address_invalid", { value });
   }
-  return parsed.flatMap((item) => item.type === "group" ? item.addresses : [item]).map((mailbox) => ({
-    ...(mailbox.name === null ? {} : { name: mailbox.name }),
-    email: mailbox.address,
-    raw: formatMailbox(mailbox.name, mailbox.address),
-  }));
+  return parsed
+    .flatMap((item) => (item.type === "group" ? item.addresses : [item]))
+    .map((mailbox) => ({
+      ...(mailbox.name === null ? {} : { name: mailbox.name }),
+      email: mailbox.address,
+      raw: formatMailbox(mailbox.name, mailbox.address),
+    }));
 }
 
 function encodeHeader(value: string): string {
-  return /^[\x20-\x7E]*$/.test(value)
-    ? value
-    : `=?UTF-8?B?${Buffer.from(value).toString("base64")}?=`;
+  return /^[\x20-\x7E]*$/.test(value) ? value : `=?UTF-8?B?${Buffer.from(value).toString("base64")}?=`;
 }
 
-function buildBody(options: {
-  text?: string;
-  html?: string;
-  attachments?: AttachmentInput[];
-}): { headers: string[]; body: string } {
+function buildBody(options: { text?: string; html?: string; attachments?: AttachmentInput[] }): {
+  headers: string[];
+  body: string;
+} {
   let bodyHeaders: string[];
   let body: string;
   if (options.html !== undefined) {
@@ -192,9 +191,15 @@ function buildBody(options: {
     bodyHeaders = [`Content-Type: multipart/alternative; boundary="${boundary}"`];
     body = [
       `--${boundary}`,
-      part(["Content-Type: text/plain; charset=UTF-8", "Content-Transfer-Encoding: base64"], Buffer.from(text, "utf8").toString("base64")),
+      part(
+        ["Content-Type: text/plain; charset=UTF-8", "Content-Transfer-Encoding: base64"],
+        Buffer.from(text, "utf8").toString("base64"),
+      ),
       `--${boundary}`,
-      part(["Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64"], Buffer.from(options.html, "utf8").toString("base64")),
+      part(
+        ["Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64"],
+        Buffer.from(options.html, "utf8").toString("base64"),
+      ),
       `--${boundary}--`,
     ].join("\r\n");
   } else {
@@ -207,7 +212,10 @@ function buildBody(options: {
   const boundary = `mix_${crypto.randomUUID().replace(/-/g, "")}`;
   const bodyPart = [...bodyHeaders, "", body].join("\r\n");
   const attachmentParts = options.attachments.map((attachment) => {
-    const filename = assertHeaderValue(attachment.filename || basename(attachment.filename) || "attachment", "attachment filename");
+    const filename = assertHeaderValue(
+      attachment.filename || basename(attachment.filename) || "attachment",
+      "attachment filename",
+    );
     const fallbackFilename = filename.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "\\$&");
     const encodedFilename = encodeParameter(filename);
     const mimeType = safeMimeType(attachment.mimeType ?? guessMimeType(attachment.filename));
@@ -257,21 +265,20 @@ function formatAddressInputs(values: string[], headerName: string, required = fa
 
 function formatSingleAddress(value: string, headerName: string): string {
   const addresses = parseAddresses(value);
-  if (addresses.length !== 1) {
+  const [address] = addresses;
+  if (address === undefined || addresses.length !== 1) {
     throw new CliError(`${headerName} requires exactly one email address.`, "address_invalid", {
       header: headerName,
     });
   }
-  return addresses[0]!.raw;
+  return address.raw;
 }
 
 function formatMailbox(name: string | null, address: string): string {
   const safeAddress = assertHeaderValue(address, "email address");
   if (!name) return safeAddress;
   const safeName = assertHeaderValue(name, "display name");
-  const phrase = /^[\x20-\x7E]*$/.test(safeName)
-    ? `"${safeName.replace(/["\\]/g, "\\$&")}"`
-    : encodeHeader(safeName);
+  const phrase = /^[\x20-\x7E]*$/.test(safeName) ? `"${safeName.replace(/["\\]/g, "\\$&")}"` : encodeHeader(safeName);
   return `${phrase} <${safeAddress}>`;
 }
 
@@ -291,7 +298,8 @@ function safeMimeType(value: string): string {
 }
 
 function encodeParameter(value: string): string {
-  return encodeURIComponent(value).replace(/[!'()*]/g, (character) =>
-    `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  return encodeURIComponent(value).replace(
+    /[!'()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
   );
 }

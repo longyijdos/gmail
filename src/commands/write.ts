@@ -1,4 +1,5 @@
 import {
+  type AttachmentInput,
   base64urlDecode,
   createDraft,
   deleteDraft,
@@ -13,16 +14,9 @@ import {
   profile,
   sendDraft,
   sendMessage,
-  type AttachmentInput,
 } from "@/gmail";
 import { CliError } from "@/utils";
-import {
-  argumentAt,
-  escapeHtml,
-  resolveAttachments,
-  resolveBody,
-  resolveOptionalBody,
-} from "./helpers";
+import { argumentAt, escapeHtml, resolveAttachments, resolveBody, resolveOptionalBody } from "./helpers";
 import type { CommandContext } from "./types";
 
 export async function handleWriteCommand(context: CommandContext): Promise<unknown> {
@@ -159,7 +153,9 @@ async function forward(context: CommandContext): Promise<unknown> {
       bcc: options.bcc,
       subject: /^fwd?:/i.test(subject) ? subject : `Fwd: ${subject}`,
       ...(options.html === true
-        ? { html: `${intro.html ?? ""}<br><br>${escapeHtml(forwardedHeader).replace(/\n/g, "<br>")}<br>${body.html || `<pre>${escapeHtml(body.text)}</pre>`}` }
+        ? {
+            html: `${intro.html ?? ""}<br><br>${escapeHtml(forwardedHeader).replace(/\n/g, "<br>")}<br>${body.html || `<pre>${escapeHtml(body.text)}</pre>`}`,
+          }
         : { text: `${intro.text ?? ""}\n\n${forwardedHeader}\n${body.text || htmlToText(body.html)}` }),
       attachments: [...originalAttachments, ...(await resolveAttachments(options))],
       oauthClient,

@@ -1,12 +1,9 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { saveCredentials, type OAuthClient, type StoredToken } from "@/auth";
+import { type OAuthClient, type StoredToken, saveCredentials } from "@/auth";
 
-export type FetchHandler = (
-  input: RequestInfo | URL,
-  init?: RequestInit,
-) => Response | Promise<Response>;
+export type FetchHandler = (input: RequestInfo | URL, init?: RequestInit) => Response | Promise<Response>;
 
 type GmailSandboxOptions = {
   scopes: string[];
@@ -17,10 +14,7 @@ type GmailSandboxOptions = {
 
 let globalStateTail = Promise.resolve();
 
-export async function withGmailSandbox<T>(
-  options: GmailSandboxOptions,
-  run: () => T | Promise<T>,
-): Promise<T> {
+export async function withGmailSandbox<T>(options: GmailSandboxOptions, run: () => T | Promise<T>): Promise<T> {
   return await withGlobalState(async () => {
     const directory = await mkdtemp(join(tmpdir(), "gml-test-"));
     const previousHome = process.env.GML_HOME;
@@ -64,9 +58,7 @@ export async function withMockFetch<T>(
   });
 }
 
-export async function withNativeFetch<T>(
-  run: (nativeFetch: typeof fetch) => T | Promise<T>,
-): Promise<T> {
+export async function withNativeFetch<T>(run: (nativeFetch: typeof fetch) => T | Promise<T>): Promise<T> {
   return await withGlobalState(() => run(globalThis.fetch));
 }
 

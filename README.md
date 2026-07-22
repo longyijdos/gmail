@@ -15,8 +15,19 @@ During local development:
 
 ```sh
 bun install
+bun run check
 bun run build
 ./dist/gml.js help
+```
+
+Code quality commands:
+
+```sh
+bun run format        # format files in place
+bun run format:check  # verify formatting only
+bun run lint          # run the linter
+bun run lint:fix      # apply safe lint fixes
+bun run check:fix     # format, lint, typecheck, and test
 ```
 
 ## Google setup

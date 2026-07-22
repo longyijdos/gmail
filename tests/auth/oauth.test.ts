@@ -14,9 +14,7 @@ describe("OAuth callback", () => {
 
         const response = await nativeFetch(url);
         expect(response.status).toBe(200);
-        expect(await response.text()).toBe(
-          "Authorization received. Return to gml while it completes sign-in.",
-        );
+        expect(await response.text()).toBe("Authorization received. Return to gml while it completes sign-in.");
         await expect(code).resolves.toBe("authorization-code");
       } finally {
         await callback.close();
@@ -26,38 +24,40 @@ describe("OAuth callback", () => {
 
   test("times out while exchanging an authorization code for tokens", async () => {
     let authorizationReceived = false;
-    await withMockFetch((_input, init) => {
-      return new Promise<Response>((_resolve, reject) => {
-        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
-      });
-    }, async (nativeFetch) => {
-      const result = login(
-        { clientId: "test-client" },
-        [GMAIL_SCOPES.readonly],
-        {
+    await withMockFetch(
+      (_input, init) => {
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+        });
+      },
+      async (nativeFetch) => {
+        const result = login({ clientId: "test-client" }, [GMAIL_SCOPES.readonly], {
           openBrowser: false,
           tokenRequestTimeoutMs: 10,
           async onAuthorizationUrl(authorizationUrl) {
             const url = new URL(authorizationUrl);
-            const callbackUrl = new URL(url.searchParams.get("redirect_uri")!);
-            callbackUrl.searchParams.set("state", url.searchParams.get("state")!);
+            const redirectUri = url.searchParams.get("redirect_uri");
+            const state = url.searchParams.get("state");
+            if (redirectUri === null || state === null) throw new Error("OAuth URL is missing callback parameters.");
+            const callbackUrl = new URL(redirectUri);
+            callbackUrl.searchParams.set("state", state);
             callbackUrl.searchParams.set("code", "sensitive-authorization-code");
             await nativeFetch(callbackUrl);
           },
           onAuthorizationReceived() {
             authorizationReceived = true;
           },
-        },
-      );
+        });
 
-      await expect(result).rejects.toMatchObject({
-        code: "oauth_token_timeout",
-        details: {
-          endpoint: "https://oauth2.googleapis.com/token",
-          timeoutMs: 10,
-        },
-      });
-      expect(authorizationReceived).toBe(true);
-    });
+        await expect(result).rejects.toMatchObject({
+          code: "oauth_token_timeout",
+          details: {
+            endpoint: "https://oauth2.googleapis.com/token",
+            timeoutMs: 10,
+          },
+        });
+        expect(authorizationReceived).toBe(true);
+      },
+    );
   });
 });

@@ -1,9 +1,9 @@
-export { runCommand } from "./router";
 export { collectMessageIds, type MessageIdPage } from "./helpers";
-export {
-  type CommandArgument,
-  type CommandContext,
-  type CommandId,
-  type CommandInvocation,
-  type CommandOptions,
+export { runCommand } from "./router";
+export type {
+  CommandArgument,
+  CommandContext,
+  CommandId,
+  CommandInvocation,
+  CommandOptions,
 } from "./types";

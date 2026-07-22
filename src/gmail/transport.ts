@@ -46,15 +46,19 @@ async function sendRequest(
   let response: Response;
   let text: string;
   try {
-    ({ response, text } = await fetchText(url, {
-      method: options.method,
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${token}`,
-        ...(options.body === undefined ? {} : { "Content-Type": "application/json" }),
+    ({ response, text } = await fetchText(
+      url,
+      {
+        method: options.method,
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+          ...(options.body === undefined ? {} : { "Content-Type": "application/json" }),
+        },
+        ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
       },
-      ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
-    }, options.timeoutMs ?? GMAIL_REQUEST_TIMEOUT_MS));
+      options.timeoutMs ?? GMAIL_REQUEST_TIMEOUT_MS,
+    ));
   } catch (error) {
     if (error instanceof HttpTimeoutError) {
       throw new CliError(
@@ -103,17 +107,18 @@ function buildUrl(path: string, query?: Record<string, QueryValue>): URL {
 
 function gmailResponseError(response: Response, body: unknown, method: string, url: URL): CliError {
   const retryable = response.status === 429 || response.status >= 500;
-  const code = response.status === 401
-    ? "gmail_unauthorized"
-    : response.status === 403
-      ? "gmail_forbidden"
-      : response.status === 404
-        ? "gmail_not_found"
-        : response.status === 429
-          ? "gmail_rate_limited"
-          : response.status >= 500
-            ? "gmail_server_error"
-            : "gmail_request_failed";
+  const code =
+    response.status === 401
+      ? "gmail_unauthorized"
+      : response.status === 403
+        ? "gmail_forbidden"
+        : response.status === 404
+          ? "gmail_not_found"
+          : response.status === 429
+            ? "gmail_rate_limited"
+            : response.status >= 500
+              ? "gmail_server_error"
+              : "gmail_request_failed";
   return new CliError("Gmail API request failed.", code, {
     status: response.status,
     method,

@@ -11,27 +11,29 @@ export async function handleAuthCommand(invocation: CommandInvocation): Promise<
     const token = await login(client, scopes.normalized, {
       openBrowser: !noOpen,
       onAuthorizationUrl(url) {
-        process.stdout.write([
-          "Authorize gml by opening this URL:",
-          "",
-          url,
-          "",
-          noOpen
-            ? "Waiting for authorization..."
-            : "Opening your browser and waiting for authorization...",
-          "",
-        ].join("\n"));
+        process.stdout.write(
+          [
+            "Authorize gml by opening this URL:",
+            "",
+            url,
+            "",
+            noOpen ? "Waiting for authorization..." : "Opening your browser and waiting for authorization...",
+            "",
+          ].join("\n"),
+        );
       },
       onAuthorizationReceived() {
         process.stdout.write("Authorization received. Exchanging code for tokens...\n");
       },
       onBrowserOpenError(error) {
         const message = error instanceof Error ? error.message : String(error);
-        process.stdout.write([
-          `Could not open the browser automatically: ${message}`,
-          "Open the URL above manually. Waiting for authorization...",
-          "",
-        ].join("\n"));
+        process.stdout.write(
+          [
+            `Could not open the browser automatically: ${message}`,
+            "Open the URL above manually. Waiting for authorization...",
+            "",
+          ].join("\n"),
+        );
       },
     });
     return {

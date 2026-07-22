@@ -1,8 +1,8 @@
 import { CommanderError } from "commander";
-import packageJson from "../../package.json" with { type: "json" };
 import { buildProgram } from "@/cli";
-import { runCommand, type CommandInvocation } from "@/commands";
+import { type CommandInvocation, runCommand } from "@/commands";
 import { CliError } from "@/utils";
+import packageJson from "../../package.json" with { type: "json" };
 
 export type ExecutionOutcome =
   | { ok: true; invocation?: CommandInvocation; value?: unknown }

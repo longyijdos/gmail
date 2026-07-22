@@ -19,24 +19,30 @@ describe("MIME", () => {
   });
 
   test("rejects MIME header injection", () => {
-    expect(() => buildRaw({
-      to: ["a@example.com"],
-      subject: "Hello\r\nBcc: attacker@example.com",
-      text: "Body",
-    })).toThrow("Subject cannot contain line breaks");
-    expect(() => buildRaw({
-      to: ["a@example.com\r\nBcc: attacker@example.com"],
-      subject: "Hello",
-      text: "Body",
-    })).toThrow("address cannot contain line breaks");
+    expect(() =>
+      buildRaw({
+        to: ["a@example.com"],
+        subject: "Hello\r\nBcc: attacker@example.com",
+        text: "Body",
+      }),
+    ).toThrow("Subject cannot contain line breaks");
+    expect(() =>
+      buildRaw({
+        to: ["a@example.com\r\nBcc: attacker@example.com"],
+        subject: "Hello",
+        text: "Body",
+      }),
+    ).toThrow("address cannot contain line breaks");
   });
 
   test("rejects line breaks in attachment filenames", () => {
-    expect(() => buildRaw({
-      to: ["a@example.com"],
-      subject: "Attachment",
-      text: "Body",
-      attachments: [{ filename: "report.pdf\r\nX-Test: yes", content: Buffer.from("test") }],
-    })).toThrow("attachment filename cannot contain line breaks");
+    expect(() =>
+      buildRaw({
+        to: ["a@example.com"],
+        subject: "Attachment",
+        text: "Body",
+        attachments: [{ filename: "report.pdf\r\nX-Test: yes", content: Buffer.from("test") }],
+      }),
+    ).toThrow("attachment filename cannot contain line breaks");
   });
 });

@@ -31,11 +31,20 @@ export function buildProgram(run: CommandRunner, version = "0.1.0"): Command {
   const labels = program.command("labels").description("List Gmail labels");
   apiRunnable(labels, "labels.list", run);
   apiRunnable(labels.command("list").description("List Gmail labels"), "labels.list", run);
-  apiRunnable(program.command("label-create [name]").description("Create a label"), "labels.create", run)
-    .option("--name <name>", "label name");
-  apiRunnable(program.command("label-delete <label>").description("Delete a label by name or id"), "labels.delete", run);
-  apiRunnable(program.command("label-rename <label>").description("Rename a label"), "labels.rename", run)
-    .requiredOption("--to <name>", "new label name");
+  apiRunnable(program.command("label-create [name]").description("Create a label"), "labels.create", run).option(
+    "--name <name>",
+    "label name",
+  );
+  apiRunnable(
+    program.command("label-delete <label>").description("Delete a label by name or id"),
+    "labels.delete",
+    run,
+  );
+  apiRunnable(
+    program.command("label-rename <label>").description("Rename a label"),
+    "labels.rename",
+    run,
+  ).requiredOption("--to <name>", "new label name");
 
   addListOptions(
     apiRunnable(
@@ -54,8 +63,10 @@ export function buildProgram(run: CommandRunner, version = "0.1.0"): Command {
 
   const messages = program.command("messages").description("Access Gmail messages");
   messages.action(() => messages.help());
-  addListOptions(apiRunnable(messages.command("list").description("List messages"), "messages.list", run))
-    .option("--q <query>", "Gmail search query");
+  addListOptions(apiRunnable(messages.command("list").description("List messages"), "messages.list", run)).option(
+    "--q <query>",
+    "Gmail search query",
+  );
   apiRunnable(messages.command("get [id]").description("Get a Gmail API message resource"), "messages.get", run)
     .option("--id <id>", "message id")
     .addOption(new Option("--format <format>", "response format").choices(["full", "minimal", "raw", "metadata"]))
@@ -102,11 +113,7 @@ export function buildProgram(run: CommandRunner, version = "0.1.0"): Command {
   );
 
   addOptionalBodyOptions(
-    apiRunnable(
-      program.command("forward [message-id]").description("Forward a message"),
-      "messages.forward",
-      run,
-    )
+    apiRunnable(program.command("forward [message-id]").description("Forward a message"), "messages.forward", run)
       .option("--id <id>", "message id")
       .requiredOption("--to <address>", "recipient; repeat for multiple recipients", collect)
       .option("--cc <address>", "CC recipient; repeat for multiple recipients", collect)
@@ -125,10 +132,14 @@ export function buildProgram(run: CommandRunner, version = "0.1.0"): Command {
     .option("--page-token <token>", "pagination token")
     .option("--q <query>", "Gmail search query")
     .addOption(includeSpamTrashOption());
-  apiRunnable(program.command("draft-send [draft-id]").description("Send a draft"), "drafts.send", run)
-    .option("--id <id>", "draft id");
-  apiRunnable(program.command("draft-delete [draft-id]").description("Delete a draft"), "drafts.delete", run)
-    .option("--id <id>", "draft id");
+  apiRunnable(program.command("draft-send [draft-id]").description("Send a draft"), "drafts.send", run).option(
+    "--id <id>",
+    "draft id",
+  );
+  apiRunnable(program.command("draft-delete [draft-id]").description("Delete a draft"), "drafts.delete", run).option(
+    "--id <id>",
+    "draft id",
+  );
 
   addBulkOptions(
     apiRunnable(

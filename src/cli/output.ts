@@ -1,5 +1,5 @@
-import { errorToJson, writeJson } from "./json";
 import type { CommandId, CommandInvocation } from "@/commands";
+import { errorToJson, writeJson } from "./json";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -74,10 +74,7 @@ export function formatCommandOutput(value: unknown, command: CommandId): string 
   if (MODIFY_COMMANDS.has(command)) {
     const updated = stringValue(root.updated);
     const batches = stringValue(root.batches);
-    return [
-      `${updated || "0"} message(s) updated.`,
-      ...(batches ? [`Batches: ${batches}`] : []),
-    ].join("\n");
+    return [`${updated || "0"} message(s) updated.`, ...(batches ? [`Batches: ${batches}`] : [])].join("\n");
   }
 
   return formatValue(data);
@@ -108,10 +105,12 @@ function formatProfile(value: unknown): string {
 function formatLabels(value: unknown): string {
   const labels = arrayValue(asRecord(value)?.labels);
   if (labels.length === 0) return "No labels.";
-  return labels.map((item) => {
-    const label = asRecord(item) ?? {};
-    return [label.id, label.name, label.type].map(stringValue).filter(Boolean).join("\t");
-  }).join("\n");
+  return labels
+    .map((item) => {
+      const label = asRecord(item) ?? {};
+      return [label.id, label.name, label.type].map(stringValue).filter(Boolean).join("\t");
+    })
+    .join("\n");
 }
 
 function formatLabel(value: unknown): string {
@@ -128,13 +127,16 @@ function formatMessageList(value: unknown): string {
     lines.push("ID\tTHREAD\tDATE\tFROM\tSUBJECT\tLABELS");
     lines.push(...summaries.flatMap((item) => formatMessageSummary(item)));
   } else {
-    lines.push(...messages.map((item) => {
-      const message = asRecord(item) ?? {};
-      return [message.id, message.threadId].map(stringValue).filter(Boolean).join("\t");
-    }));
+    lines.push(
+      ...messages.map((item) => {
+        const message = asRecord(item) ?? {};
+        return [message.id, message.threadId].map(stringValue).filter(Boolean).join("\t");
+      }),
+    );
   }
   if (response.nextPageToken !== undefined) lines.push(`Next page: ${stringValue(response.nextPageToken)}`);
-  if (response.resultSizeEstimate !== undefined) lines.push(`Estimated total: ${stringValue(response.resultSizeEstimate)}`);
+  if (response.resultSizeEstimate !== undefined)
+    lines.push(`Estimated total: ${stringValue(response.resultSizeEstimate)}`);
   return lines.join("\n");
 }
 
@@ -179,21 +181,24 @@ function formatThreadList(value: unknown): string {
   const lines = [`${threads.length} thread(s).`];
   lines.push(...threads.map((item) => stringValue(asRecord(item)?.id)).filter(Boolean));
   if (response.nextPageToken !== undefined) lines.push(`Next page: ${stringValue(response.nextPageToken)}`);
-  if (response.resultSizeEstimate !== undefined) lines.push(`Estimated total: ${stringValue(response.resultSizeEstimate)}`);
+  if (response.resultSizeEstimate !== undefined)
+    lines.push(`Estimated total: ${stringValue(response.resultSizeEstimate)}`);
   return lines.join("\n");
 }
 
 function formatAttachments(value: unknown): string {
   const attachments = arrayValue(value);
   if (attachments.length === 0) return "No attachments.";
-  return attachments.map((item) => {
-    const attachment = asRecord(item) ?? {};
-    const size = attachment.size === undefined ? "" : `${stringValue(attachment.size)} bytes`;
-    return [attachment.filename, attachment.mimeType, size, attachment.attachmentId]
-      .map(stringValue)
-      .filter(Boolean)
-      .join("\t");
-  }).join("\n");
+  return attachments
+    .map((item) => {
+      const attachment = asRecord(item) ?? {};
+      const size = attachment.size === undefined ? "" : `${stringValue(attachment.size)} bytes`;
+      return [attachment.filename, attachment.mimeType, size, attachment.attachmentId]
+        .map(stringValue)
+        .filter(Boolean)
+        .join("\t");
+    })
+    .join("\n");
 }
 
 function formatDownloads(value: unknown): string {
@@ -213,23 +218,23 @@ function formatDownloads(value: unknown): string {
 
 function formatDryRun(root: JsonRecord): string {
   const ids = stringArray(root.ids);
-  return [
-    `Dry run: ${stringValue(root.matched) || ids.length} message(s) matched.`,
-    ...ids,
-  ].join("\n");
+  return [`Dry run: ${stringValue(root.matched) || ids.length} message(s) matched.`, ...ids].join("\n");
 }
 
 function formatDraftList(value: unknown): string {
   const response = asRecord(value) ?? {};
   const drafts = arrayValue(response.drafts);
   const lines = [`${drafts.length} draft(s).`];
-  lines.push(...drafts.map((item) => {
-    const draft = asRecord(item) ?? {};
-    const message = asRecord(draft.message) ?? {};
-    return [draft.id, message.id, message.threadId].map(stringValue).filter(Boolean).join("\t");
-  }));
+  lines.push(
+    ...drafts.map((item) => {
+      const draft = asRecord(item) ?? {};
+      const message = asRecord(draft.message) ?? {};
+      return [draft.id, message.id, message.threadId].map(stringValue).filter(Boolean).join("\t");
+    }),
+  );
   if (response.nextPageToken !== undefined) lines.push(`Next page: ${stringValue(response.nextPageToken)}`);
-  if (response.resultSizeEstimate !== undefined) lines.push(`Estimated total: ${stringValue(response.resultSizeEstimate)}`);
+  if (response.resultSizeEstimate !== undefined)
+    lines.push(`Estimated total: ${stringValue(response.resultSizeEstimate)}`);
   return lines.join("\n");
 }
 
@@ -246,29 +251,31 @@ function formatValue(value: unknown, indent = 0): string {
   const prefix = " ".repeat(indent);
   if (Array.isArray(value)) {
     if (value.length === 0) return `${prefix}(none)`;
-    return value.map((item) => {
-      if (isScalar(item)) return `${prefix}- ${inlineValue(item)}`;
-      return `${prefix}-\n${formatValue(item, indent + 2)}`;
-    }).join("\n");
+    return value
+      .map((item) => {
+        if (isScalar(item)) return `${prefix}- ${inlineValue(item)}`;
+        return `${prefix}-\n${formatValue(item, indent + 2)}`;
+      })
+      .join("\n");
   }
   const record = asRecord(value);
   if (record !== undefined) {
     const entries = Object.entries(record);
     if (entries.length === 0) return `${prefix}(empty)`;
-    return entries.map(([key, item]) => {
-      if (isScalar(item) || (Array.isArray(item) && item.every(isScalar))) {
-        return `${prefix}${labelFor(key)}: ${inlineValue(item)}`;
-      }
-      return `${prefix}${labelFor(key)}:\n${formatValue(item, indent + 2)}`;
-    }).join("\n");
+    return entries
+      .map(([key, item]) => {
+        if (isScalar(item) || (Array.isArray(item) && item.every(isScalar))) {
+          return `${prefix}${labelFor(key)}: ${inlineValue(item)}`;
+        }
+        return `${prefix}${labelFor(key)}:\n${formatValue(item, indent + 2)}`;
+      })
+      .join("\n");
   }
   return `${prefix}${inlineValue(value)}`;
 }
 
 function asRecord(value: unknown): JsonRecord | undefined {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? value as JsonRecord
-    : undefined;
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as JsonRecord) : undefined;
 }
 
 function arrayValue(value: unknown): unknown[] {

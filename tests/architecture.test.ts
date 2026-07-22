@@ -47,7 +47,7 @@ async function listTypeScriptFiles(directory: string): Promise<string[]> {
   const files: string[] = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
-    if (entry.isDirectory()) files.push(...await listTypeScriptFiles(path));
+    if (entry.isDirectory()) files.push(...(await listTypeScriptFiles(path)));
     else if (entry.isFile() && entry.name.endsWith(".ts")) files.push(path);
   }
   return files.sort();
