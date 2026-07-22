@@ -75,6 +75,22 @@ describe("CLI arguments", () => {
       quietProgram().parseAsync(["messages", "list", "--max-results", "501"], { from: "user" }),
     ).rejects.toMatchObject({ code: "commander.invalidArgument" });
   });
+
+  test("parses read body limits and rejects conflicting modes", async () => {
+    let invocation: CommandInvocation | undefined;
+    const program = buildProgram(async (current) => {
+      invocation = current;
+    });
+    await program.parseAsync(["read", "message-1", "--max-body-chars", "5000"], { from: "user" });
+    expect(invocation).toMatchObject({
+      id: "messages.read",
+      options: { maxBodyChars: 5000 },
+    });
+
+    await expect(
+      quietProgram().parseAsync(["read", "message-1", "--full", "--max-body-chars", "5000"], { from: "user" }),
+    ).rejects.toMatchObject({ code: "commander.conflictingOption" });
+  });
 });
 
 function quietProgram() {

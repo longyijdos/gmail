@@ -18,6 +18,8 @@ import { CliError } from "@/utils";
 import { argumentAt, resolveLabelOptions, variadicArguments } from "./helpers";
 import type { CommandContext } from "./types";
 
+const DEFAULT_READ_BODY_CHARS = 12_000;
+
 export async function handleReadCommand(context: CommandContext): Promise<unknown> {
   const { id, args, options, oauthClient } = context;
   if (id === "profile") return { ok: true, data: await profile(oauthClient) };
@@ -104,6 +106,8 @@ async function readMessage(context: CommandContext): Promise<unknown> {
   const payload = message.payload;
   const body = extractBody(payload);
   if (!body.text && body.html) body.text = htmlToText(body.html);
+  const normalizedBody =
+    options.full === true ? body : limitReadBody(body, options.maxBodyChars ?? DEFAULT_READ_BODY_CHARS);
   return {
     ok: true,
     data: {
@@ -120,10 +124,36 @@ async function readMessage(context: CommandContext): Promise<unknown> {
         messageId: header(payload, "Message-ID"),
         references: header(payload, "References"),
       },
-      body,
+      body: normalizedBody,
       attachments: listAttachments(payload),
     },
   };
+}
+
+function limitReadBody(
+  body: { text: string; html: string },
+  limit: number,
+): { text: string; html: string; truncated?: true; originalCharacters?: number } {
+  const useText = body.text.length > 0;
+  const content = useText ? body.text : body.html;
+  if (content.length <= limit) return { text: useText ? content : "", html: useText ? "" : content };
+  const truncated = sliceWithoutSplittingSurrogate(content, limit);
+  return {
+    text: useText ? truncated : "",
+    html: useText ? "" : truncated,
+    truncated: true,
+    originalCharacters: content.length,
+  };
+}
+
+function sliceWithoutSplittingSurrogate(value: string, limit: number): string {
+  let end = limit;
+  const finalCodeUnit = value.charCodeAt(end - 1);
+  const nextCodeUnit = value.charCodeAt(end);
+  if (finalCodeUnit >= 0xd800 && finalCodeUnit <= 0xdbff && nextCodeUnit >= 0xdc00 && nextCodeUnit <= 0xdfff) {
+    end -= 1;
+  }
+  return value.slice(0, end);
 }
 
 async function downloadAttachments(context: CommandContext): Promise<unknown> {

@@ -74,7 +74,13 @@ export function buildProgram(run: CommandRunner, version = "0.1.0"): Command {
 
   apiRunnable(program.command("read [id]").description("Read a normalized message"), "messages.read", run)
     .option("--id <id>", "message id")
-    .option("--raw", "return the raw RFC 2822 message");
+    .addOption(new Option("--raw", "return the raw RFC 2822 message").conflicts(["full", "maxBodyChars"]))
+    .addOption(new Option("--full", "return the complete normalized body").conflicts(["raw", "maxBodyChars"]))
+    .addOption(
+      new Option("--max-body-chars <count>", "maximum normalized body characters")
+        .argParser((value) => parseCount(value))
+        .conflicts(["raw", "full"]),
+    );
 
   addThreadListOptions(
     apiRunnable(program.command("threads [query...]").description("List threads"), "threads.list", run),

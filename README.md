@@ -128,6 +128,7 @@ gml messages list --q 'from:alice@example.com newer_than:7d' --max-results 10
 gml messages get MESSAGE_ID --format metadata --metadata-header Subject --metadata-header From
 gml list 'is:unread newer_than:3d' --max-results 10
 gml read MESSAGE_ID
+gml read MESSAGE_ID --full
 gml threads 'from:alice@example.com'
 gml attachments MESSAGE_ID
 gml download MESSAGE_ID --out ./attachments
@@ -150,6 +151,11 @@ Query-based write commands require either `--max-results <count>` or an explicit
 `--all`. Use `--dry-run` first to inspect the resolved message IDs. Gmail batch
 modifications are automatically split into requests of at most 1000 message
 IDs. Downloads refuse to replace existing files unless `--force` is present.
+
+`read` returns at most 12,000 normalized body characters by default and marks
+truncated output. Use `--max-body-chars <count>` to choose another limit,
+`--full` for the complete normalized body, or `--raw` for the complete RFC 2822
+message.
 
 The implemented endpoints and response types are tracked in
 [`docs/gmail-api-audit.md`](docs/gmail-api-audit.md).

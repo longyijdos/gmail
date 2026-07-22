@@ -159,6 +159,7 @@ function formatRead(root: JsonRecord): string {
   const message = asRecord(root.data) ?? {};
   const headers = asRecord(message.headers) ?? {};
   const body = asRecord(message.body) ?? {};
+  const content = stringValue(body.text) || stringValue(body.html) || stringValue(message.snippet);
   const lines = [
     `From: ${stringValue(headers.from)}`,
     `To: ${stringValue(headers.to)}`,
@@ -168,8 +169,14 @@ function formatRead(root: JsonRecord): string {
     `Message ID: ${stringValue(message.id)}`,
     `Thread ID: ${stringValue(message.threadId)}`,
     "",
-    stringValue(body.text) || stringValue(body.html) || stringValue(message.snippet),
+    content,
   ];
+  if (body.truncated === true) {
+    lines.push(
+      "",
+      `[Body truncated: showing ${content.length} of ${stringValue(body.originalCharacters)} characters. Use --full to read the complete body.]`,
+    );
+  }
   const attachments = arrayValue(message.attachments);
   if (attachments.length > 0) lines.push("", "Attachments:", formatAttachments(attachments));
   return lines.join("\n");

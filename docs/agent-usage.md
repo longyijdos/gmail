@@ -27,6 +27,11 @@ Read only the selected message:
 gml read MESSAGE_ID
 ```
 
+Normalized reads are limited to 12,000 body characters by default. A truncated
+result includes its original character count. Use a smaller
+`--max-body-chars <count>` when context is constrained, and `--full` only when
+the complete body is required.
+
 Preview query-based writes, then repeat without `--dry-run`:
 
 ```sh

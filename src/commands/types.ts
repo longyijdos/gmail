@@ -55,12 +55,14 @@ export type CommandOptions = {
   force?: boolean;
   format?: string;
   from?: string;
+  full?: boolean;
   html?: boolean;
   id?: string;
   includeSpamTrash?: boolean;
   json?: boolean;
   label?: string[];
   labelId?: string[];
+  maxBodyChars?: number;
   maxResults?: number;
   metadataHeader?: string[];
   method?: string;

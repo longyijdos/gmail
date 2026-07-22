@@ -5,6 +5,58 @@ import { collectMessageIds } from "@/commands";
 import { withGmailSandbox } from "../support";
 
 describe("command execution", () => {
+  test("limits normalized message bodies unless --full is set", async () => {
+    const messageBody = "Hello world ".repeat(1_100);
+    await withGmailSandbox(
+      {
+        scopes: [GMAIL_SCOPES.readonly],
+        fetch() {
+          return Response.json({
+            id: "message-1",
+            threadId: "thread-1",
+            payload: {
+              mimeType: "text/plain",
+              headers: [],
+              body: { data: Buffer.from(messageBody).toString("base64url") },
+            },
+          });
+        },
+      },
+      async () => {
+        const limited = await executeCommand(["read", "message-1", "--max-body-chars", "5"]);
+        expect(limited).toMatchObject({
+          ok: true,
+          value: {
+            data: {
+              body: { text: "Hello", html: "", truncated: true, originalCharacters: messageBody.length },
+            },
+          },
+        });
+
+        const defaultLimited = await executeCommand(["read", "message-1"]);
+        expect(defaultLimited).toMatchObject({
+          ok: true,
+          value: {
+            data: {
+              body: {
+                text: messageBody.slice(0, 12_000),
+                html: "",
+                truncated: true,
+                originalCharacters: messageBody.length,
+              },
+            },
+          },
+        });
+
+        const full = await executeCommand(["read", "message-1", "--full"]);
+        expect(full).toMatchObject({
+          ok: true,
+          value: { data: { body: { text: messageBody, html: "" } } },
+        });
+      },
+    );
+  });
+
   test("enriches message lists with metadata summaries", async () => {
     const requestedUrls: string[] = [];
     await withGmailSandbox(

@@ -65,6 +65,23 @@ describe("text output", () => {
     ).toContain("Not authorized.\nState: unauthorized");
   });
 
+  test("marks truncated message bodies", () => {
+    expect(
+      formatCommandOutput(
+        {
+          ok: true,
+          data: {
+            id: "message-1",
+            threadId: "thread-1",
+            headers: { from: "a@example.com", to: "b@example.com", subject: "Long message" },
+            body: { text: "Hello", html: "", truncated: true, originalCharacters: 42 },
+          },
+        },
+        "messages.read",
+      ),
+    ).toContain("[Body truncated: showing 5 of 42 characters. Use --full to read the complete body.]");
+  });
+
   test("formats bulk dry runs without claiming messages were updated", () => {
     expect(
       formatCommandOutput(
