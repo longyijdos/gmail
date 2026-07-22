@@ -26,10 +26,10 @@ export async function handleReadCommand(context: CommandContext): Promise<unknow
       ok: true,
       data: await listMessages({
         q,
-        maxResults: stringNumber(options.maxResults),
+        maxResults: options.maxResults,
         pageToken: options.pageToken,
         labelIds: await resolveLabelOptions(options, oauthClient),
-        includeSpamTrash: stringBoolean(options.includeSpamTrash),
+        includeSpamTrash: options.includeSpamTrash,
         oauthClient,
       }),
     };
@@ -54,10 +54,10 @@ export async function handleReadCommand(context: CommandContext): Promise<unknow
       ok: true,
       data: await listThreads({
         q,
-        maxResults: stringNumber(options.maxResults),
+        maxResults: options.maxResults,
         pageToken: options.pageToken,
         labelIds: await resolveLabelOptions(options, oauthClient),
-        includeSpamTrash: stringBoolean(options.includeSpamTrash),
+        includeSpamTrash: options.includeSpamTrash,
         oauthClient,
       }),
     };
@@ -78,7 +78,7 @@ export async function handleReadCommand(context: CommandContext): Promise<unknow
   if (id === "messages.attachments") {
     const messageId = argumentAt(args, 0) ?? options.id;
     if (!messageId) throw new CliError("Missing message id.", "message_id_missing");
-    const message = await getMessage({ id: messageId, format: "full", oauthClient }) as Record<string, unknown>;
+    const message = await getMessage({ id: messageId, format: "full", oauthClient });
     return { ok: true, data: listAttachments(message.payload) };
   }
   return downloadAttachments(context);
@@ -92,7 +92,7 @@ async function readMessage(context: CommandContext): Promise<unknown> {
     id: messageId,
     format: options.raw === true ? "raw" : "full",
     oauthClient,
-  }) as Record<string, unknown>;
+  });
   if (options.raw === true) {
     if (typeof message.raw !== "string") {
       throw new CliError("Raw message response did not include raw data.", "raw_message_missing");
@@ -129,7 +129,7 @@ async function downloadAttachments(context: CommandContext): Promise<unknown> {
   const messageId = argumentAt(args, 0) ?? options.id;
   if (!messageId) throw new CliError("Missing message id.", "message_id_missing");
   const outDir = options.out ?? ".";
-  const message = await getMessage({ id: messageId, format: "full", oauthClient }) as Record<string, unknown>;
+  const message = await getMessage({ id: messageId, format: "full", oauthClient });
   const attachments = listAttachments(message.payload).filter(
     (attachment) => options.attachment === undefined || attachment.attachmentId === options.attachment,
   );
@@ -141,7 +141,7 @@ async function downloadAttachments(context: CommandContext): Promise<unknown> {
       messageId,
       attachmentId: attachment.attachmentId,
       oauthClient,
-    }) as Record<string, unknown>;
+    });
     if (typeof data.data !== "string") {
       throw new CliError("Attachment response did not include data.", "attachment_data_missing");
     }
@@ -163,14 +163,6 @@ async function downloadAttachments(context: CommandContext): Promise<unknown> {
     saved.push({ file, bytes: content.byteLength, attachmentId: attachment.attachmentId });
   }
   return { ok: true, downloaded: saved };
-}
-
-function stringNumber(value: number | undefined): string | undefined {
-  return value === undefined ? undefined : String(value);
-}
-
-function stringBoolean(value: boolean | undefined): string | undefined {
-  return value === undefined ? undefined : String(value);
 }
 
 function isFileExists(error: unknown): boolean {

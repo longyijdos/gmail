@@ -14,7 +14,7 @@ import {
 import { executeCommand } from "@/app";
 import { buildProgram, formatCommandOutput } from "@/cli";
 import { collectMessageIds, type CommandInvocation } from "@/commands";
-import { buildRaw, encodeMime, modifyMessages, parseAddresses, profile } from "@/gmail";
+import { buildRaw, encodeMime, gmailRequest, modifyMessages, parseAddresses, profile } from "@/gmail";
 
 describe("args", () => {
   test("Commander produces typed repeated options and positionals", async () => {
@@ -278,6 +278,126 @@ describe("Gmail API client", () => {
       await profile();
       expect(requestedUrl).toStartWith("https://gmail.googleapis.com/gmail/v1/");
       expect(requestedUrl).toContain("/users/me/profile");
+    } finally {
+      globalThis.fetch = previousFetch;
+      if (previousHome === undefined) delete process.env.GML_HOME;
+      else process.env.GML_HOME = previousHome;
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("times out stalled Gmail API requests with retry metadata", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "gml-test-"));
+    const previousHome = process.env.GML_HOME;
+    const previousFetch = globalThis.fetch;
+    try {
+      process.env.GML_HOME = directory;
+      await saveCredentials({
+        client: { clientId: "test-client" },
+        token: {
+          accessToken: "test-token",
+          tokenType: "Bearer",
+          expiresAt: Date.now() + 3_600_000,
+          scopes: [GMAIL_SCOPES.readonly],
+        },
+      });
+      globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+        return await new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+        });
+      }) as unknown as typeof fetch;
+
+      await expect(gmailRequest({
+        method: "GET",
+        path: "/users/me/profile",
+        acceptedScopes: [GMAIL_SCOPES.readonly],
+        timeoutMs: 10,
+      })).rejects.toMatchObject({
+        code: "gmail_request_timeout",
+        details: { timeoutMs: 10, retryable: true },
+      });
+    } finally {
+      globalThis.fetch = previousFetch;
+      if (previousHome === undefined) delete process.env.GML_HOME;
+      else process.env.GML_HOME = previousHome;
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("maps Gmail rate limits to a stable retryable error", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "gml-test-"));
+    const previousHome = process.env.GML_HOME;
+    const previousFetch = globalThis.fetch;
+    try {
+      process.env.GML_HOME = directory;
+      await saveCredentials({
+        client: { clientId: "test-client" },
+        token: {
+          accessToken: "test-token",
+          tokenType: "Bearer",
+          expiresAt: Date.now() + 3_600_000,
+          scopes: [GMAIL_SCOPES.readonly],
+        },
+      });
+      globalThis.fetch = (async () => Response.json({
+        error: {
+          status: "RESOURCE_EXHAUSTED",
+          message: "Rate limit exceeded",
+          errors: [{ reason: "rateLimitExceeded" }],
+        },
+      }, { status: 429, headers: { "Retry-After": "5" } })) as unknown as typeof fetch;
+
+      await expect(profile()).rejects.toMatchObject({
+        code: "gmail_rate_limited",
+        details: {
+          status: 429,
+          retryable: true,
+          retryAfter: "5",
+          googleReason: "rateLimitExceeded",
+        },
+      });
+    } finally {
+      globalThis.fetch = previousFetch;
+      if (previousHome === undefined) delete process.env.GML_HOME;
+      else process.env.GML_HOME = previousHome;
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("refreshes once after a Gmail 401 response", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "gml-test-"));
+    const previousHome = process.env.GML_HOME;
+    const previousFetch = globalThis.fetch;
+    const authorizations: string[] = [];
+    try {
+      process.env.GML_HOME = directory;
+      await saveCredentials({
+        client: { clientId: "test-client", clientSecret: "test-secret" },
+        token: {
+          accessToken: "old-token",
+          refreshToken: "refresh-token",
+          tokenType: "Bearer",
+          expiresAt: Date.now() + 3_600_000,
+          scopes: [GMAIL_SCOPES.readonly],
+        },
+      });
+      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = input.toString();
+        if (url === "https://oauth2.googleapis.com/token") {
+          return Response.json({ access_token: "new-token", token_type: "Bearer", expires_in: 3600 });
+        }
+        authorizations.push(new Headers(init?.headers).get("Authorization") ?? "");
+        if (authorizations.length === 1) return Response.json({ error: { message: "Expired" } }, { status: 401 });
+        return Response.json({
+          emailAddress: "agent@example.com",
+          messagesTotal: 1,
+          threadsTotal: 1,
+          historyId: "10",
+        });
+      }) as unknown as typeof fetch;
+
+      await expect(profile()).resolves.toMatchObject({ emailAddress: "agent@example.com" });
+      expect(authorizations).toEqual(["Bearer old-token", "Bearer new-token"]);
     } finally {
       globalThis.fetch = previousFetch;
       if (previousHome === undefined) delete process.env.GML_HOME;

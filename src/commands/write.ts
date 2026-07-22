@@ -35,10 +35,10 @@ export async function handleWriteCommand(context: CommandContext): Promise<unkno
     return {
       ok: true,
       data: await listDrafts({
-        maxResults: stringNumber(options.maxResults),
+        maxResults: options.maxResults,
         pageToken: options.pageToken,
         q: options.q,
-        includeSpamTrash: stringBoolean(options.includeSpamTrash),
+        includeSpamTrash: options.includeSpamTrash,
         oauthClient,
       }),
     };
@@ -80,9 +80,9 @@ async function reply(context: CommandContext): Promise<unknown> {
     format: "metadata",
     metadataHeaders: ["From", "To", "Cc", "Subject", "Message-ID", "References", "Reply-To"],
     oauthClient,
-  }) as Record<string, unknown>;
+  });
   const payload = original.payload;
-  const me = ((await profile(oauthClient)) as { emailAddress?: string }).emailAddress?.toLowerCase();
+  const me = (await profile(oauthClient)).emailAddress?.toLowerCase();
   const from = parseAddresses(header(payload, "Reply-To") || header(payload, "From"));
   const to = from.map((address) => address.raw);
   const cc: string[] = [];
@@ -121,7 +121,7 @@ async function forward(context: CommandContext): Promise<unknown> {
   if (!messageId || to.length === 0) {
     throw new CliError("Usage: gml forward <message-id> --to <addr>", "args_invalid");
   }
-  const original = await getMessage({ id: messageId, format: "full", oauthClient }) as Record<string, unknown>;
+  const original = await getMessage({ id: messageId, format: "full", oauthClient });
   const payload = original.payload;
   const body = extractBody(payload);
   const intro = await resolveOptionalBody(options);
@@ -140,7 +140,7 @@ async function forward(context: CommandContext): Promise<unknown> {
         messageId,
         attachmentId: attachment.attachmentId,
         oauthClient,
-      }) as Record<string, unknown>;
+      });
       if (typeof data.data === "string") {
         originalAttachments.push({
           filename: attachment.filename,
@@ -191,12 +191,4 @@ async function draft(context: CommandContext): Promise<unknown> {
 function addressOptions(value: string | string[] | undefined): string[] {
   if (Array.isArray(value)) return value;
   return value === undefined ? [] : [value];
-}
-
-function stringNumber(value: number | undefined): string | undefined {
-  return value === undefined ? undefined : String(value);
-}
-
-function stringBoolean(value: boolean | undefined): string | undefined {
-  return value === undefined ? undefined : String(value);
 }

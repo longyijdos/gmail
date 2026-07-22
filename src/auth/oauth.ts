@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { createServer, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import { CliError } from "@/utils";
+import { CliError, fetchText, HttpNetworkError, HttpTimeoutError } from "@/utils";
 import {
   type OAuthClient,
   type StoredToken,
@@ -142,6 +142,7 @@ export async function login(
 export async function getAccessToken(
   acceptedScopes: string[] = [],
   client?: OAuthClient,
+  forceRefresh = false,
 ): Promise<string> {
   const credentials = await loadCredentials();
   let token = credentials.token;
@@ -158,7 +159,7 @@ export async function getAccessToken(
       accepted: acceptedScopes,
     });
   }
-  if (isUsable(token)) return token.accessToken;
+  if (!forceRefresh && isUsable(token)) return token.accessToken;
   if (!token.refreshToken) {
     throw new CliError("Access token expired and no refresh token is available. Run `gml auth login` again.", "refresh_unavailable");
   }
@@ -246,13 +247,11 @@ async function refreshToken(client: OAuthClient, token: StoredToken): Promise<St
 }
 
 async function tokenRequest(params: URLSearchParams, timeoutMs = TOKEN_REQUEST_TIMEOUT_MS): Promise<unknown> {
-  const controller = new AbortController();
   const effectiveTimeoutMs = Math.max(1, timeoutMs);
-  const timer = setTimeout(() => controller.abort(), effectiveTimeoutMs);
   let response: Response;
   let text: string;
   try {
-    response = await fetch(TOKEN_ENDPOINT, {
+    ({ response, text } = await fetchText(TOKEN_ENDPOINT, {
       method: "POST",
       headers: {
         Accept: "application/json",
@@ -260,24 +259,21 @@ async function tokenRequest(params: URLSearchParams, timeoutMs = TOKEN_REQUEST_T
       },
       body: params.toString(),
       redirect: "error",
-      signal: controller.signal,
-    });
-    text = await response.text();
+    }, effectiveTimeoutMs));
   } catch (error) {
-    if (controller.signal.aborted) {
+    if (error instanceof HttpTimeoutError) {
       throw new CliError(
         "Timed out connecting to the Google OAuth token endpoint. Check network or proxy access to oauth2.googleapis.com, then run `gml auth login` again.",
         "oauth_token_timeout",
         { endpoint: TOKEN_ENDPOINT, timeoutMs: effectiveTimeoutMs },
       );
     }
+    if (!(error instanceof HttpNetworkError)) throw error;
     throw new CliError(
       "Could not connect to the Google OAuth token endpoint. Check network or proxy access to oauth2.googleapis.com.",
       "oauth_token_network_error",
       { endpoint: TOKEN_ENDPOINT, cause: errorMessage(error) },
     );
-  } finally {
-    clearTimeout(timer);
   }
   let body: unknown = {};
   if (text) {

@@ -120,7 +120,7 @@ export async function resolveTargets(
       (pageToken, pageSize) => listMessages({
         q: options.query,
         pageToken,
-        maxResults: String(pageSize),
+        maxResults: pageSize,
         oauthClient,
       }) as Promise<MessageIdPage>,
       options.maxResults,

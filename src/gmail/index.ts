@@ -1,24 +1,13 @@
+export { createDraft, deleteDraft, listDrafts, sendDraft } from "./drafts";
+export { createLabel, deleteLabel, listLabels, patchLabel } from "./labels";
 export {
-  createDraft,
-  createLabel,
-  deleteDraft,
-  deleteLabel,
   getAttachment,
   getMessage,
-  getThread,
-  gmailRequest,
-  listDrafts,
-  listLabels,
   listMessages,
-  listThreads,
   messageAction,
   modifyMessages,
-  patchLabel,
-  profile,
-  sendDraft,
   sendMessage,
-  type RequestOptions,
-} from "./client";
+} from "./messages";
 export {
   base64urlDecode,
   buildRaw,
@@ -31,3 +20,21 @@ export {
   parseAddresses,
   type AttachmentInput,
 } from "./mime";
+export { profile } from "./profile";
+export { getThread, listThreads } from "./threads";
+export { gmailRequest, type QueryValue, type RequestOptions } from "./transport";
+export {
+  type BatchModifyResult,
+  type GmailDraft,
+  type GmailHeader,
+  type GmailLabel,
+  type GmailMessage,
+  type GmailMessagePart,
+  type GmailMessagePartBody,
+  type GmailProfile,
+  type GmailThread,
+  type ListDraftsResponse,
+  type ListLabelsResponse,
+  type ListMessagesResponse,
+  type ListThreadsResponse,
+} from "./types";
