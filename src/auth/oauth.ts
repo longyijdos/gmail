@@ -9,7 +9,7 @@ import {
   loadCredentials,
   saveCredentials,
 } from "./credentials";
-import { CliError } from "../cli";
+import { CliError } from "../errors";
 
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";

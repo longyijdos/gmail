@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { type OAuthClient, readGoogleClientSecretFile } from "../auth";
-import { CliError, many, one } from "../cli";
+import { many, one } from "../cli/args";
+import { CliError } from "../errors";
 import { guessMimeType, listLabels, listMessages, type AttachmentInput } from "../gmail";
 
 export async function resolveBody(

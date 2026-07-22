@@ -1,4 +1,5 @@
-import { bool, CliError, many, one } from "../cli";
+import { bool, many, one } from "../cli/args";
+import { CliError } from "../errors";
 import {
   base64urlDecode,
   createDraft,

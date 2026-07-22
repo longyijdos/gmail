@@ -1,6 +1,6 @@
 import { basename, extname } from "node:path";
 import emailAddresses from "email-addresses";
-import { CliError } from "../cli";
+import { CliError } from "../errors";
 
 export type AttachmentInput = {
   filename: string;

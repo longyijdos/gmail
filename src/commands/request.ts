@@ -1,4 +1,5 @@
-import { CliError, one, readJsonFlag } from "../cli";
+import { one, readJsonFlag } from "../cli/args";
+import { CliError } from "../errors";
 import { gmailRequest } from "../gmail";
 import type { CommandContext } from "./types";
 

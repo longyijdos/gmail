@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { bool, CliError, many, one } from "../cli";
+import { bool, many, one } from "../cli/args";
+import { CliError } from "../errors";
 import {
   base64urlDecode,
   extractBody,

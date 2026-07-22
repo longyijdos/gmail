@@ -1,5 +1,5 @@
 import { authStatus, deleteCredentials, login, normalizeScopes } from "../auth";
-import { many, one } from "../cli";
+import { many, one } from "../cli/args";
 import { resolveOAuthClient } from "./helpers";
 import type { CommandContext } from "./types";
 

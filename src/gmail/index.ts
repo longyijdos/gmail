@@ -1,2 +1,33 @@
-export * from "./client";
-export * from "./mime";
+export {
+  createDraft,
+  createLabel,
+  deleteDraft,
+  deleteLabel,
+  getAttachment,
+  getMessage,
+  getThread,
+  gmailRequest,
+  listDrafts,
+  listLabels,
+  listMessages,
+  listThreads,
+  messageAction,
+  modifyMessages,
+  patchLabel,
+  profile,
+  sendDraft,
+  sendMessage,
+  type RequestOptions,
+} from "./client";
+export {
+  base64urlDecode,
+  buildRaw,
+  encodeMime,
+  extractBody,
+  guessMimeType,
+  header,
+  htmlToText,
+  listAttachments,
+  parseAddresses,
+  type AttachmentInput,
+} from "./mime";

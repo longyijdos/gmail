@@ -8,9 +8,9 @@ import {
   hasAcceptedScope,
   login,
   normalizeScopes,
-  saveCredentials,
-  startCallbackServer,
 } from "../src/auth";
+import { saveCredentials } from "../src/auth/credentials";
+import { startCallbackServer } from "../src/auth/oauth";
 import { buildProgram, formatCommandOutput, parseArgs, wantsJson } from "../src/cli";
 import { buildRaw, encodeMime, modifyMessages, parseAddresses, profile } from "../src/gmail";
 import { collectMessageIds } from "../src/commands/helpers";

@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
-import { executeCommand, exitCodeFor, writeCommandError, writeCommandOutput } from "./cli";
+import { exitCodeFor, writeCommandError, writeCommandOutput } from "./cli";
+import { executeCommand } from "./execute";
 
 const argv = process.argv.slice(2);
 

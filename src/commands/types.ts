@@ -1,5 +1,5 @@
 import type { OAuthClient } from "../auth";
-import type { ParsedArgs } from "../cli";
+import type { ParsedArgs } from "../cli/args";
 
 export type CommandContext = {
   parsed: ParsedArgs;

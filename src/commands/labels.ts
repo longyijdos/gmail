@@ -1,4 +1,5 @@
-import { CliError, one } from "../cli";
+import { one } from "../cli/args";
+import { CliError } from "../errors";
 import { createLabel, deleteLabel, listLabels, patchLabel } from "../gmail";
 import { resolveLabelId } from "./helpers";
 import type { CommandContext } from "./types";

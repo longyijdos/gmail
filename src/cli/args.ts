@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { CliError } from "./json";
+import { CliError } from "../errors";
 
 export type ParsedArgs = {
   positionals: string[];

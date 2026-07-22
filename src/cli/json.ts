@@ -1,16 +1,6 @@
-export type JsonObject = Record<string, unknown>;
+import { CliError } from "../errors";
 
-export class CliError extends Error {
-  constructor(
-    message: string,
-    public readonly code = "error",
-    public readonly details?: JsonObject,
-    public readonly exitCode = 1,
-  ) {
-    super(message);
-    this.name = "CliError";
-  }
-}
+export type JsonObject = Record<string, unknown>;
 
 export function writeJson(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
