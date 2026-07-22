@@ -22,7 +22,7 @@ export {
   parseAddresses,
 } from "./mime";
 export { profile } from "./profile";
-export { getThread, listThreads } from "./threads";
+export { getThread, listThreads, summarizeThreads } from "./threads";
 export { gmailRequest, type QueryValue, type RequestOptions } from "./transport";
 export type {
   BatchModifyResult,
@@ -39,5 +39,7 @@ export type {
   ListMessagesResponse,
   ListMessagesWithSummariesResponse,
   ListThreadsResponse,
+  ListThreadsWithSummariesResponse,
   MessageSummary,
+  ThreadSummary,
 } from "./types";

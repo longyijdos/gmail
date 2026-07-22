@@ -110,6 +110,58 @@ describe("command execution", () => {
     );
   });
 
+  test("enriches thread lists with the latest message metadata", async () => {
+    const requestedUrls: string[] = [];
+    await withGmailSandbox(
+      {
+        scopes: [GMAIL_SCOPES.readonly],
+        fetch(input) {
+          const url = input.toString();
+          requestedUrls.push(url);
+          if (url.includes("/threads?")) return Response.json({ threads: [{ id: "thread-1" }] });
+          return Response.json({
+            id: "thread-1",
+            messages: [
+              { id: "message-1" },
+              {
+                id: "message-2",
+                labelIds: ["INBOX"],
+                snippet: "Latest reply",
+                payload: {
+                  headers: [
+                    { name: "From", value: "jane@example.com" },
+                    { name: "Subject", value: "Re: Update" },
+                  ],
+                },
+              },
+            ],
+          });
+        },
+      },
+      async () => {
+        const outcome = await executeCommand(["threads", "newer_than:7d", "--max-results", "1", "--summary"]);
+        expect(outcome).toMatchObject({
+          ok: true,
+          value: {
+            data: {
+              summaries: [
+                {
+                  id: "thread-1",
+                  messageCount: 2,
+                  latestMessageId: "message-2",
+                  from: "jane@example.com",
+                  subject: "Re: Update",
+                },
+              ],
+            },
+          },
+        });
+        expect(requestedUrls).toHaveLength(2);
+        expect(requestedUrls[1]).toContain("format=metadata");
+      },
+    );
+  });
+
   test("requires an explicit limit or --all for query-based writes", async () => {
     const outcome = await executeCommand(["archive", "--query", "is:inbox"]);
     expect(outcome).toMatchObject({

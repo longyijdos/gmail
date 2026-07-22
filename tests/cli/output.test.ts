@@ -82,6 +82,39 @@ describe("text output", () => {
     ).toContain("[Body truncated: showing 5 of 42 characters. Use --full to read the complete body.]");
   });
 
+  test("formats thread summaries for agent scanning", () => {
+    expect(
+      formatCommandOutput(
+        {
+          ok: true,
+          data: {
+            threads: [{ id: "thread-1" }],
+            summaries: [
+              {
+                id: "thread-1",
+                messageCount: 2,
+                latestMessageId: "message-2",
+                date: "Tue, 21 Jul 2026 09:00:00 +0000",
+                from: "Jane Doe <jane@example.com>",
+                subject: "Re: Quarterly update",
+                snippet: "The latest numbers are ready.",
+                labelIds: ["INBOX", "IMPORTANT"],
+              },
+            ],
+          },
+        },
+        "threads.list",
+      ),
+    ).toBe(
+      [
+        "1 thread(s).",
+        "THREAD\tMESSAGES\tLATEST_MESSAGE\tDATE\tFROM\tSUBJECT\tLABELS",
+        "thread-1\t2\tmessage-2\tTue, 21 Jul 2026 09:00:00 +0000\tJane Doe <jane@example.com>\tRe: Quarterly update\tINBOX,IMPORTANT",
+        "  The latest numbers are ready.",
+      ].join("\n"),
+    );
+  });
+
   test("formats bulk dry runs without claiming messages were updated", () => {
     expect(
       formatCommandOutput(

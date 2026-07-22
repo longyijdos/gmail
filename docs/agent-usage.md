@@ -21,6 +21,12 @@ gml messages list \
   --summary
 ```
 
+Use the equivalent thread view when conversation grouping matters:
+
+```sh
+gml threads 'is:inbox newer_than:7d' --max-results 20 --summary
+```
+
 Read only the selected message:
 
 ```sh

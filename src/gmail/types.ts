@@ -84,6 +84,24 @@ export type ListThreadsResponse = {
   resultSizeEstimate?: number;
 };
 
+export type ThreadSummary = {
+  id: string;
+  historyId?: string;
+  messageCount: number;
+  latestMessageId?: string;
+  from?: string;
+  to?: string;
+  date?: string;
+  subject?: string;
+  snippet?: string;
+  labelIds?: string[];
+  error?: { code: string; message: string };
+};
+
+export type ListThreadsWithSummariesResponse = ListThreadsResponse & {
+  summaries: ThreadSummary[];
+};
+
 export type GmailDraft = {
   id?: string;
   message?: GmailMessage;

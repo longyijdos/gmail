@@ -186,11 +186,41 @@ function formatThreadList(value: unknown): string {
   const response = asRecord(value) ?? {};
   const threads = arrayValue(response.threads);
   const lines = [`${threads.length} thread(s).`];
-  lines.push(...threads.map((item) => stringValue(asRecord(item)?.id)).filter(Boolean));
+  const summaries = arrayValue(response.summaries);
+  if (summaries.length > 0) {
+    lines.push("THREAD\tMESSAGES\tLATEST_MESSAGE\tDATE\tFROM\tSUBJECT\tLABELS");
+    lines.push(...summaries.flatMap((item) => formatThreadSummary(item)));
+  } else {
+    lines.push(...threads.map((item) => stringValue(asRecord(item)?.id)).filter(Boolean));
+  }
   if (response.nextPageToken !== undefined) lines.push(`Next page: ${stringValue(response.nextPageToken)}`);
   if (response.resultSizeEstimate !== undefined)
     lines.push(`Estimated total: ${stringValue(response.resultSizeEstimate)}`);
   return lines.join("\n");
+}
+
+function formatThreadSummary(value: unknown): string[] {
+  const summary = asRecord(value) ?? {};
+  const error = asRecord(summary.error);
+  if (error !== undefined) {
+    return [
+      `${singleLine(summary.id)}\t${singleLine(summary.messageCount)}\t\t\t\t[${singleLine(error.code)}] ${singleLine(error.message)}\t`,
+    ];
+  }
+  return [
+    [
+      summary.id,
+      summary.messageCount,
+      summary.latestMessageId,
+      summary.date,
+      summary.from,
+      summary.subject,
+      arrayValue(summary.labelIds).join(","),
+    ]
+      .map(singleLine)
+      .join("\t"),
+    ...(summary.snippet === undefined ? [] : [`  ${singleLine(summary.snippet)}`]),
+  ];
 }
 
 function formatAttachments(value: unknown): string {

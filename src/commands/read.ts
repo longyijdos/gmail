@@ -13,6 +13,7 @@ import {
   listThreads,
   profile,
   summarizeMessages,
+  summarizeThreads,
 } from "@/gmail";
 import { CliError } from "@/utils";
 import { argumentAt, resolveLabelOptions, variadicArguments } from "./helpers";
@@ -54,16 +55,17 @@ export async function handleReadCommand(context: CommandContext): Promise<unknow
   if (id === "messages.read") return readMessage(context);
   if (id === "threads.list") {
     const q = variadicArguments(args).join(" ") || options.q;
+    const response = await listThreads({
+      q,
+      maxResults: options.maxResults,
+      pageToken: options.pageToken,
+      labelIds: await resolveLabelOptions(options, oauthClient),
+      includeSpamTrash: options.includeSpamTrash,
+      oauthClient,
+    });
     return {
       ok: true,
-      data: await listThreads({
-        q,
-        maxResults: options.maxResults,
-        pageToken: options.pageToken,
-        labelIds: await resolveLabelOptions(options, oauthClient),
-        includeSpamTrash: options.includeSpamTrash,
-        oauthClient,
-      }),
+      data: options.summary === true ? await summarizeThreads(response, oauthClient) : response,
     };
   }
   if (id === "threads.get") {

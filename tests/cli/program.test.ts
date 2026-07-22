@@ -91,6 +91,19 @@ describe("CLI arguments", () => {
       quietProgram().parseAsync(["read", "message-1", "--full", "--max-body-chars", "5000"], { from: "user" }),
     ).rejects.toMatchObject({ code: "commander.conflictingOption" });
   });
+
+  test("enables summaries for thread lists", async () => {
+    let invocation: CommandInvocation | undefined;
+    const program = buildProgram(async (current) => {
+      invocation = current;
+    });
+    await program.parseAsync(["threads", "newer_than:7d", "--summary"], { from: "user" });
+    expect(invocation).toMatchObject({
+      id: "threads.list",
+      args: [["newer_than:7d"]],
+      options: { summary: true },
+    });
+  });
 });
 
 function quietProgram() {

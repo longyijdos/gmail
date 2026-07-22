@@ -129,7 +129,7 @@ gml messages get MESSAGE_ID --format metadata --metadata-header Subject --metada
 gml list 'is:unread newer_than:3d' --max-results 10
 gml read MESSAGE_ID
 gml read MESSAGE_ID --full
-gml threads 'from:alice@example.com'
+gml threads 'from:alice@example.com' --max-results 10 --summary
 gml attachments MESSAGE_ID
 gml download MESSAGE_ID --out ./attachments
 gml download MESSAGE_ID --out ./attachments --force
